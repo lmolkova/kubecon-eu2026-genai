@@ -1,0 +1,87 @@
+"""OpenTelemetry setup — traces, metrics, and logs with OTLP gRPC export."""
+
+import logging
+
+from opentelemetry import metrics, trace
+from opentelemetry._logs import set_logger_provider
+from opentelemetry.exporter.otlp.proto.grpc._log_exporter import OTLPLogExporter
+from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExporter
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler, LogRecordProcessor
+from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
+from opentelemetry.sdk.metrics import MeterProvider
+from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExporter, SpanExportResult
+from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
+from opentelemetry.instrumentation.openai_v2 import OpenAIInstrumentor
+
+
+class FilteringSpanExporter(SpanExporter):
+    _SUFFIXES = ("http receive", "http send")
+
+    def __init__(self, exporter: SpanExporter):
+        self._exporter = exporter
+
+    def export(self, spans):
+        filtered = [s for s in spans if not any(s.name.lower().endswith(suffix) for suffix in self._SUFFIXES)]
+        if not filtered:
+            return SpanExportResult.SUCCESS
+        return self._exporter.export(filtered)
+
+    def shutdown(self):
+        self._exporter.shutdown()
+
+    def force_flush(self, timeout_millis=30000):
+        return self._exporter.force_flush(timeout_millis)
+
+
+class DropCodeAttributesLogProcessor(LogRecordProcessor):
+    def on_emit(self, log_record):
+        attrs = log_record.log_record.attributes
+        if attrs:
+            log_record.log_record.attributes = {k: v for k, v in attrs.items() if not k.startswith("code")}
+
+    def shutdown(self):
+        pass
+
+    def force_flush(self, timeout_millis=30000):
+        return True
+
+
+def configure_opentelemetry() -> None:
+    _configure_traces()
+    _configure_metrics()
+    _configure_logs()
+    HTTPXClientInstrumentor().instrument()
+    OpenAIInstrumentor().instrument()
+
+
+def _configure_traces() -> None:
+    provider = TracerProvider()
+    provider.add_span_processor(
+        BatchSpanProcessor(FilteringSpanExporter(OTLPSpanExporter()))
+    )
+    trace.set_tracer_provider(provider)
+
+
+def _configure_metrics() -> None:
+    reader = PeriodicExportingMetricReader(
+        OTLPMetricExporter(),
+        export_interval_millis=10_000,
+    )
+    provider = MeterProvider(metric_readers=[reader])
+    metrics.set_meter_provider(provider)
+
+
+def _configure_logs() -> None:
+    provider = LoggerProvider()
+    provider.add_log_record_processor(DropCodeAttributesLogProcessor())
+    provider.add_log_record_processor(
+        BatchLogRecordProcessor(OTLPLogExporter())
+    )
+    set_logger_provider(provider)
+
+    handler = LoggingHandler(level=logging.INFO, logger_provider=provider)
+    logging.getLogger().addHandler(handler)
+    logging.getLogger().setLevel(logging.INFO)

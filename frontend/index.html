@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HR AI Assistant</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f4f6f9;
+      color: #1a1a2e;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 1rem;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+    header h1 { font-size: 1.8rem; color: #2d3a8c; }
+    header p  { color: #555; margin-top: 0.4rem; }
+
+    .card {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+      padding: 1.8rem;
+      width: 100%;
+      max-width: 700px;
+      margin-bottom: 1.5rem;
+    }
+
+    label { display: block; font-weight: 600; margin-bottom: 0.4rem; font-size: 0.9rem; color: #333; }
+
+    input[type=password] {
+      width: 100%;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      padding: 0.6rem 0.8rem;
+      font-size: 1rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    input[type=password]:focus { border-color: #2d3a8c; }
+
+    input[type=text], textarea {
+      width: 100%;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      padding: 0.6rem 0.8rem;
+      font-size: 1rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    input[type=text]:focus, textarea:focus { border-color: #2d3a8c; }
+
+    textarea { resize: vertical; min-height: 120px; }
+
+    .field { margin-bottom: 1.2rem; }
+
+    input[type=file] {
+      display: block;
+      margin-top: 0.3rem;
+      font-size: 0.9rem;
+      color: #555;
+    }
+
+    .user-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      background: #e8eaf6;
+      border-radius: 99px;
+      padding: 0.3rem 0.9rem;
+      font-size: 0.85rem;
+      color: #2d3a8c;
+      margin-top: 0.6rem;
+    }
+    .user-pill button {
+      background: none;
+      border: none;
+      color: #888;
+      cursor: pointer;
+      font-size: 0.8rem;
+      padding: 0;
+    }
+    .user-pill button:hover { color: #c62828; }
+
+    .login-error { color: #c62828; font-size: 0.875rem; margin-top: 0.5rem; display: none; }
+
+    button[type=submit] {
+      background: #2d3a8c;
+      color: white;
+      border: none;
+      padding: 0.75rem 2rem;
+      border-radius: 8px;
+      font-size: 1rem;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+      transition: background 0.2s;
+    }
+    button[type=submit]:hover  { background: #1e2870; }
+    button[type=submit]:disabled { background: #9aa3cc; cursor: not-allowed; }
+
+    /* ---- Result area ---- */
+    #results { display: none; width: 100%; max-width: 700px; }
+
+    .stage-card {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+      padding: 1.4rem;
+      margin-bottom: 1rem;
+    }
+    .stage-card h2 { font-size: 1rem; font-weight: 700; margin-bottom: 0.8rem; display: flex; align-items: center; gap: 0.5rem; }
+
+    .badge {
+      display: inline-block;
+      padding: 0.2rem 0.6rem;
+      border-radius: 99px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .badge-routine    { background: #e8f5e9; color: #2e7d32; }
+    .badge-urgent     { background: #fff3e0; color: #e65100; }
+    .badge-sensitive  { background: #fce4ec; color: #c62828; }
+    .badge-vacation   { background: #e3f2fd; color: #1565c0; }
+    .badge-leave      { background: #f3e5f5; color: #6a1b9a; }
+    .badge-compensation { background: #e8f5e9; color: #1b5e20; }
+    .badge-conduct    { background: #fce4ec; color: #880e4f; }
+    .badge-termination { background: #fff8e1; color: #f57f17; }
+    .badge-general    { background: #eeeeee; color: #424242; }
+    .badge-escalated  { background: #ffebee; color: #b71c1c; }
+    .badge-resolved   { background: #e8f5e9; color: #1b5e20; }
+    .badge-revision   { background: #fff3e0; color: #e65100; }
+
+    .info-row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.6rem; }
+
+    p.answer { line-height: 1.6; color: #333; }
+
+    ul.list { padding-left: 1.2rem; color: #444; line-height: 1.7; }
+    ul.list a { color: #2d3a8c; text-decoration: underline; }
+    ul.list a:hover { color: #1e2870; }
+
+    .missing { color: #b35a00; background: #fff8f0; border-left: 3px solid #f59e0b; padding: 0.5rem 0.8rem; border-radius: 4px; font-size: 0.9rem; margin-top: 0.6rem; }
+
+    .escalation-box {
+      border-radius: 8px;
+      padding: 1rem;
+      margin-top: 0.2rem;
+    }
+    .escalation-box.human  { background: #ffebee; border: 1px solid #ef9a9a; }
+    .escalation-box.ai     { background: #e8f5e9; border: 1px solid #a5d6a7; }
+
+    .spinner { display: inline-block; width: 18px; height: 18px; border: 3px solid #d1d5db; border-top-color: #2d3a8c; border-radius: 50%; animation: spin 0.7s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .progress-line { display: flex; align-items: center; gap: 0.6rem; color: #555; font-size: 0.95rem; padding: 0.6rem; }
+
+    #error-box { background: #ffebee; border: 1px solid #ef9a9a; border-radius: 8px; padding: 1rem; color: #b71c1c; display: none; }
+
+    /* ---- Feedback ---- */
+    #feedback-card { display: none; }
+
+    .stars { display: flex; gap: 0.3rem; margin: 0.6rem 0 1rem; }
+    .stars button {
+      background: none;
+      border: none;
+      font-size: 2rem;
+      cursor: pointer;
+      color: #d1d5db;
+      padding: 0;
+      line-height: 1;
+      transition: color 0.15s;
+    }
+    .stars button.active, .stars button:hover ~ button { color: #d1d5db; }
+    .stars:hover button { color: #f59e0b; }
+    .stars button:hover ~ button { color: #d1d5db; }
+    .stars button.active { color: #f59e0b; }
+
+    #feedback-status { font-size: 0.9rem; margin-top: 0.6rem; display: none; }
+    #feedback-status.ok  { color: #2e7d32; }
+    #feedback-status.err { color: #c62828; }
+  </style>
+</head>
+<body>
+
+<!-- Login card -->
+<div class="card" id="loginCard" style="max-width:400px">
+  <h2 style="font-size:1.1rem;margin-bottom:1.2rem;color:#2d3a8c">Sign in to HR Portal</h2>
+  <form id="loginForm">
+    <div class="field">
+      <label for="loginUsername">Username</label>
+      <input type="text" id="loginUsername" placeholder="Employee ID" value="lmolkova" required />
+    </div>
+    <div class="field">
+      <label for="loginPassword">Password</label>
+      <input type="password" id="loginPassword" required />
+    </div>
+    <div class="login-error" id="loginError"></div>
+    <button type="submit" id="loginBtn" style="margin-top:0.4rem">Sign in</button>
+  </form>
+</div>
+
+<header id="appHeader" style="display:none">
+  <h1>HR AI Assistant</h1>
+  <p>Submit your HR inquiry below. Your information is handled confidentially.</p>
+  <div class="user-pill">
+    <span id="userLabel"></span>
+    <button onclick="logout()" title="Sign out">Sign out</button>
+  </div>
+</header>
+
+<div class="card" id="inquiryCard" style="display:none">
+  <form id="inquiryForm">
+    <input type="hidden" id="employeeId" name="employee_id" />
+    <div class="field">
+      <label for="message">Your inquiry</label>
+      <textarea id="message" name="message" placeholder="Describe your question or situation in detail..." required></textarea>
+    </div>
+    <div class="field">
+      <label>Attachments (optional)</label>
+      <input type="file" id="files" name="files" multiple accept=".txt,.md,.csv,.log" />
+      <small style="color:#777;display:block;margin-top:0.3rem;">Plain text files only (.txt, .md, etc.)</small>
+    </div>
+    <button type="submit" id="submitBtn">Submit Inquiry</button>
+  </form>
+</div>
+
+<div id="error-box"></div>
+
+<div id="results">
+  <div id="progress-area" class="stage-card">
+    <div class="progress-line"><span class="spinner"></span><span id="progress-msg">Starting...</span></div>
+  </div>
+  <div id="intake-card"  class="stage-card" style="display:none"></div>
+  <div id="policy-card"  class="stage-card" style="display:none"></div>
+  <div id="review-card"  class="stage-card" style="display:none"></div>
+</div>
+
+<div id="feedback-card" class="card">
+  <h2 style="font-size:1rem;font-weight:700;margin-bottom:0.4rem;color:#2d3a8c">Rate this response</h2>
+  <p style="font-size:0.875rem;color:#555;margin-bottom:0.2rem;">How helpful was the answer?</p>
+  <div class="stars" id="stars">
+    <button type="button" data-value="1" title="1 star">&#9733;</button>
+    <button type="button" data-value="2" title="2 stars">&#9733;</button>
+    <button type="button" data-value="3" title="3 stars">&#9733;</button>
+    <button type="button" data-value="4" title="4 stars">&#9733;</button>
+    <button type="button" data-value="5" title="5 stars">&#9733;</button>
+  </div>
+  <div class="field">
+    <label for="feedbackComment" style="font-weight:500;font-size:0.875rem;">Comment (optional)</label>
+    <textarea id="feedbackComment" style="min-height:70px" placeholder="Anything else you'd like to share?"></textarea>
+  </div>
+  <button type="button" id="feedbackSubmitBtn" style="width:auto;padding:0.6rem 1.6rem;font-size:0.95rem;" disabled>Submit feedback</button>
+  <div id="feedback-status"></div>
+</div>
+
+<script>
+const form       = document.getElementById('inquiryForm');
+const submitBtn  = document.getElementById('submitBtn');
+const results    = document.getElementById('results');
+const progressArea = document.getElementById('progress-area');
+const progressMsg  = document.getElementById('progress-msg');
+const errorBox   = document.getElementById('error-box');
+
+// --- Auth ---
+
+function showApp(employee_id, name) {
+  document.getElementById('loginCard').style.display = 'none';
+  document.getElementById('appHeader').style.display = 'block';
+  document.getElementById('inquiryCard').style.display = 'block';
+  document.getElementById('employeeId').value = employee_id;
+  document.getElementById('userLabel').textContent = name + ' (' + employee_id + ')';
+}
+
+function logout() {
+  localStorage.removeItem('hr_user');
+  document.getElementById('loginCard').style.display = 'block';
+  document.getElementById('appHeader').style.display = 'none';
+  document.getElementById('inquiryCard').style.display = 'none';
+  results.style.display = 'none';
+  document.getElementById('loginPassword').value = '';
+}
+
+// Restore session on page load
+const stored = localStorage.getItem('hr_user');
+if (stored) {
+  const { employee_id, name } = JSON.parse(stored);
+  showApp(employee_id, name);
+}
+
+document.getElementById('loginForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const btn = document.getElementById('loginBtn');
+  const errEl = document.getElementById('loginError');
+  errEl.style.display = 'none';
+  btn.disabled = true;
+  btn.textContent = 'Signing in...';
+
+  const fd = new FormData();
+  fd.append('username', document.getElementById('loginUsername').value.trim());
+  fd.append('password', document.getElementById('loginPassword').value);
+
+  try {
+    const resp = await fetch('/login', { method: 'POST', body: fd });
+    if (!resp.ok) {
+      const err = await resp.json();
+      errEl.textContent = err.detail || 'Login failed';
+      errEl.style.display = 'block';
+      return;
+    }
+    const data = await resp.json();
+    localStorage.setItem('hr_user', JSON.stringify(data));
+    showApp(data.employee_id, data.name);
+  } catch (err) {
+    errEl.textContent = 'Connection error: ' + err.message;
+    errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Sign in';
+  }
+});
+
+function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+
+function badgeHtml(value, prefix='') {
+  const cls = `badge badge-${prefix || value}`;
+  return `<span class="${cls}">${cap(value)}</span>`;
+}
+
+function renderIntake(data) {
+  const card = document.getElementById('intake-card');
+  const missing = data.missing_info && data.missing_info.length
+    ? `<div class="missing"><strong>Missing info:</strong><ul class="list">${data.missing_info.map(i=>`<li>${i}</li>`).join('')}</ul></div>`
+    : '';
+  card.innerHTML = `
+    <h2>&#128269; Intake Classification</h2>
+    <div class="info-row">
+      ${badgeHtml(data.inquiry_type)}
+      ${badgeHtml(data.severity)}
+      ${data.route_to_escalation ? badgeHtml('direct escalation','sensitive') : ''}
+    </div>
+    <p class="answer">${data.summary}</p>
+    ${missing}
+  `;
+  card.style.display = 'block';
+}
+
+function renderPolicy(data) {
+  const card = document.getElementById('policy-card');
+  const roundLabel = data.revision_round > 0
+    ? `<span class="badge badge-revision">Revision ${data.revision_round}</span>`
+    : '';
+  const policyLink = (name) => {
+    const display = name.replace(/\.md$/, '').replace(/_/g, ' ')
+      .replace(/\b\w/g, c => c.toUpperCase());
+    return `<li><a href="/policies/${name}" target="_blank" rel="noopener">${display}</a></li>`;
+  };
+  const policies = data.relevant_policies && data.relevant_policies.length
+    ? `<p style="margin-top:0.8rem;font-weight:600;font-size:0.85rem;color:#555;">Policies referenced</p>
+       <ul class="list">${data.relevant_policies.map(policyLink).join('')}</ul>`
+    : '';
+  const steps = data.suggested_next_steps && data.suggested_next_steps.length
+    ? `<p style="margin-top:0.8rem;font-weight:600;font-size:0.85rem;color:#555;">Suggested next steps</p>
+       <ul class="list">${data.suggested_next_steps.map(s=>`<li>${s}</li>`).join('')}</ul>`
+    : '';
+  card.innerHTML = `
+    <h2>&#128221; Policy & Case Agent ${roundLabel}</h2>
+    <p class="answer">${data.answer.replace(/\n/g,'<br/>')}</p>
+    ${policies}
+    ${steps}
+  `;
+  card.style.display = 'block';
+}
+
+function renderReview(data) {
+  const card = document.getElementById('review-card');
+  const decision = data.decision; // 'approve' | 'request_revision' | 'escalate'
+  const roundLabel = data.revision_round > 0
+    ? ` <span class="badge badge-revision">Round ${data.revision_round}</span>`
+    : '';
+
+  let boxClass, icon, badge, extras = '';
+
+  if (decision === 'approve') {
+    boxClass = 'ai'; icon = '&#9989;';
+    badge = badgeHtml('approved', 'resolved');
+  } else if (decision === 'request_revision') {
+    boxClass = 'human'; icon = '&#128393;';
+    badge = badgeHtml('revision requested', 'revision');
+    extras = data.feedback
+      ? `<p style="margin-top:0.6rem;font-weight:600;font-size:0.85rem;color:#555;">Feedback for policy agent</p>
+         <p class="answer" style="font-size:0.9rem;">${data.feedback.replace(/\n/g,'<br/>')}</p>`
+      : '';
+  } else { // escalate
+    boxClass = 'human'; icon = '&#128680;';
+    badge = badgeHtml('escalated');
+    extras = `
+      <p style="margin-top:0.6rem;font-size:0.85rem;color:#555;"><strong>Urgency:</strong> ${cap(data.urgency)}</p>
+      ${data.visibility_restriction ? '<p style="font-size:0.85rem;color:#c62828;">&#128274; Marked confidential</p>' : ''}
+      ${data.handoff_summary ? `<p style="margin-top:0.6rem;font-weight:600;font-size:0.85rem;color:#555;">Handoff summary for HR</p>
+      <p class="answer" style="font-size:0.9rem;">${data.handoff_summary.replace(/\n/g,'<br/>')}</p>` : ''}
+    `;
+  }
+
+  card.innerHTML = `
+    <h2>${icon} Review Agent${roundLabel}</h2>
+    <div class="escalation-box ${boxClass}">
+      <div class="info-row">${badge}</div>
+      <p class="answer">${data.reason}</p>
+      ${extras}
+    </div>
+  `;
+  card.style.display = 'block';
+}
+
+// --- Feedback ---
+
+let selectedRating = 0;
+
+const starsEl = document.getElementById('stars');
+const feedbackSubmitBtn = document.getElementById('feedbackSubmitBtn');
+const feedbackStatus = document.getElementById('feedback-status');
+
+starsEl.querySelectorAll('button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    selectedRating = parseInt(btn.dataset.value);
+    starsEl.querySelectorAll('button').forEach(b => {
+      b.classList.toggle('active', parseInt(b.dataset.value) <= selectedRating);
+    });
+    feedbackSubmitBtn.disabled = false;
+  });
+});
+
+feedbackSubmitBtn.addEventListener('click', async () => {
+  if (!selectedRating) return;
+  feedbackSubmitBtn.disabled = true;
+  feedbackStatus.style.display = 'none';
+
+  const employeeId = document.getElementById('employeeId').value.trim();
+  const comment = document.getElementById('feedbackComment').value.trim() || null;
+
+  try {
+    const resp = await fetch('/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ employee_id: employeeId, rating: selectedRating, comment }),
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    feedbackStatus.textContent = 'Thank you for your feedback!';
+    feedbackStatus.className = 'ok';
+  } catch (err) {
+    feedbackStatus.textContent = 'Could not submit feedback: ' + err.message;
+    feedbackStatus.className = 'err';
+    feedbackSubmitBtn.disabled = false;
+  }
+  feedbackStatus.style.display = 'block';
+});
+
+function showFeedbackCard() {
+  selectedRating = 0;
+  starsEl.querySelectorAll('button').forEach(b => b.classList.remove('active'));
+  feedbackSubmitBtn.disabled = true;
+  feedbackStatus.style.display = 'none';
+  document.getElementById('feedbackComment').value = '';
+  document.getElementById('feedback-card').style.display = 'block';
+}
+
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  errorBox.style.display = 'none';
+  submitBtn.disabled = true;
+  submitBtn.textContent = 'Processing...';
+
+  // Hide feedback from previous run
+  document.getElementById('feedback-card').style.display = 'none';
+
+  // Reset result cards
+  ['intake-card','policy-card','review-card'].forEach(id => {
+    const el = document.getElementById(id);
+    el.style.display = 'none';
+    el.innerHTML = '';
+  });
+  progressArea.style.display = 'block';
+  progressMsg.textContent = 'Starting...';
+  results.style.display = 'block';
+
+  const fd = new FormData();
+  fd.append('employee_id', document.getElementById('employeeId').value.trim());
+  fd.append('message', document.getElementById('message').value.trim());
+  const fileInput = document.getElementById('files');
+  for (const f of fileInput.files) fd.append('files', f);
+
+  try {
+    const resp = await fetch('/inquiry', { method: 'POST', body: fd });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+
+      // Parse SSE chunks
+      const chunks = buffer.split('\n\n');
+      buffer = chunks.pop(); // keep incomplete chunk
+
+      for (const chunk of chunks) {
+        const lines = chunk.trim().split('\n');
+        let event = '', data = '';
+        for (const line of lines) {
+          if (line.startsWith('event:')) event = line.slice(6).trim();
+          if (line.startsWith('data:'))  data  = line.slice(5).trim();
+        }
+        if (!event || !data) continue;
+        const payload = JSON.parse(data);
+
+        if (event === 'progress') {
+          progressMsg.textContent = payload.message;
+        } else if (event === 'intake') {
+          renderIntake(payload);
+        } else if (event === 'policy') {
+          renderPolicy(payload);
+        } else if (event === 'review') {
+          renderReview(payload);
+        } else if (event === 'error') {
+          errorBox.textContent = 'Error: ' + payload.message;
+          errorBox.style.display = 'block';
+          progressArea.style.display = 'none';
+        } else if (event === 'done') {
+          progressArea.style.display = 'none';
+          showFeedbackCard();
+        }
+      }
+    }
+  } catch (err) {
+    errorBox.textContent = 'Request failed: ' + err.message;
+    errorBox.style.display = 'block';
+    progressArea.style.display = 'none';
+  } finally {
+    submitBtn.disabled = false;
+    submitBtn.textContent = 'Submit Inquiry';
+  }
+});
+</script>
+</body>
+</html>
