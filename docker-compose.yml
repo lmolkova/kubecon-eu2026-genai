@@ -1,10 +1,64 @@
 services:
-  lgtm:
-    image: grafana/otel-lgtm:latest
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    command: ["--config=/etc/otelcol/config.yaml"]
     ports:
-      - "3000:3000"   # Grafana UI
       - "4317:4317"   # OTLP gRPC
       - "4318:4318"   # OTLP HTTP
+    volumes:
+      - ./otelcol/config.yaml:/etc/otelcol/config.yaml
+    depends_on:
+      - tempo
+      - loki
+      - mimir
+
+  tempo:
+    image: grafana/tempo:2.10.1
+    command: ["-config.file=/etc/tempo/tempo.yaml"]
+    ports:
+      - "3200:3200"   # Tempo HTTP API (also used by Grafana MCP for trace queries)
+    volumes:
+      - ./tempo/tempo.yaml:/etc/tempo/tempo.yaml
+      - tempo_data:/var/tempo
+
+  loki:
+    image: grafana/loki:latest
+    user: "0"
+    command: ["-config.file=/etc/loki/loki.yaml"]
+    ports:
+      - "3100:3100"   # Loki HTTP API
+    volumes:
+      - ./loki/loki.yaml:/etc/loki/loki.yaml
+      - loki_data:/loki
+
+  mimir:
+    image: grafana/mimir:latest
+    user: "0"
+    command: ["-config.file=/etc/mimir/mimir.yaml"]
+    ports:
+      - "9009:9009"   # Mimir HTTP API / Prometheus-compatible endpoint
+    volumes:
+      - ./mimir/mimir.yaml:/etc/mimir/mimir.yaml
+      - mimir_data:/data/mimir
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"   # Grafana UI; MCP server at /apis/mcp.grafana.app/v1alpha1/...
+    environment:
+      GF_LOG_LEVEL: error
+      GF_FEATURE_TOGGLES_ENABLE: mcpServer
+      GF_INSTALL_PLUGINS: grafana-athena-datasource
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - grafana_data:/var/lib/grafana
+    depends_on:
+      - tempo
+      - loki
+      - mimir
 
   postgres:
     image: postgres:16
@@ -39,7 +93,7 @@ services:
       DATABASE_URL: postgresql://hr_user:hr_pass@postgres:5432/hr_db
       OPENAI_API_KEY: ${OPENAI_API_KEY}
       OTEL_SERVICE_NAME: hr-ai-assistant
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://lgtm:4317
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       OTEL_SEMCONV_STABILITY_OPT_IN: gen_ai_latest_experimental
       #OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: span_only
@@ -52,7 +106,7 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      lgtm:
+      otel-collector:
         condition: service_started
       s3mock:
         condition: service_started
@@ -62,3 +116,7 @@ services:
 
 volumes:
   postgres_data:
+  tempo_data:
+  loki_data:
+  mimir_data:
+  grafana_data:

@@ -1,0 +1,38 @@
+# Single-process Mimir for development. Do not use in production.
+target: all
+
+multitenancy_enabled: false
+
+server:
+  http_listen_port: 9009
+  log_level: error
+
+blocks_storage:
+  backend: filesystem
+  filesystem:
+    dir: /data/mimir/blocks
+  tsdb:
+    dir: /data/ingester
+
+ruler_storage:
+  backend: filesystem
+  filesystem:
+    dir: /data/mimir/rules
+
+alertmanager_storage:
+  backend: filesystem
+  filesystem:
+    dir: /data/mimir/alertmanager
+
+ingester:
+  ring:
+    replication_factor: 1
+    kvstore:
+      store: memberlist
+
+store_gateway:
+  sharding_ring:
+    replication_factor: 1
+
+memberlist:
+  join_members: []
