@@ -10,3 +10,4 @@ opentelemetry-semantic-conventions>=0.61b0
 #opentelemetry-instrumentation-openai-v2 installed from source in Dockerfile
 opentelemetry-sdk>=1.40.0
 opentelemetry-exporter-otlp>=1.40.0
+s3fs>=2024.1.0

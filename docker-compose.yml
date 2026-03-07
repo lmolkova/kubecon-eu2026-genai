@@ -22,6 +22,13 @@ services:
       timeout: 5s
       retries: 5
 
+  s3mock:
+    image: adobe/s3mock:latest
+    ports:
+      - "9090:9090"
+    environment:
+      initialBuckets: hr-assistant-chats
+
   backend:
     build:
       context: .
@@ -35,11 +42,19 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://lgtm:4317
       OTEL_EXPORTER_OTLP_PROTOCOL: grpc
       OTEL_SEMCONV_STABILITY_OPT_IN: gen_ai_latest_experimental
-      OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: span_only
+      #OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: span_only
+      OTEL_INSTRUMENTATION_GENAI_COMPLETION_HOOK: upload
+      OTEL_INSTRUMENTATION_GENAI_UPLOAD_BASE_PATH: s3://hr-assistant-chats/
+      AWS_ENDPOINT_URL: http://s3mock:9090
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-east-1
     depends_on:
       postgres:
         condition: service_healthy
       lgtm:
+        condition: service_started
+      s3mock:
         condition: service_started
     volumes:
       - ./backend:/app/backend
