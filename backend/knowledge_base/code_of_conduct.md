@@ -6,7 +6,7 @@ All employees are expected to act with integrity, respect, and professionalism. 
 
 ## Prohibited Conduct
 
-- Harassment of any kind — verbal, physical, or visual — based on any protected characteristic (gender, race, nationality, age, disability, religion, sexual orientation, etc.).
+- Harassment of any kind - verbal, physical, or visual - based on any protected characteristic (gender, race, nationality, age, disability, religion, sexual orientation, etc.).
 - Discrimination in hiring, promotions, compensation, or any employment decision.
 - Retaliation against anyone who reports a concern in good faith.
 - Bullying, intimidation, or hostile behavior toward colleagues, managers, or direct reports.

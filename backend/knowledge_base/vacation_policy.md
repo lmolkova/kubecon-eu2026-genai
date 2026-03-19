@@ -16,7 +16,7 @@
 
 1. Submit a request in the HR portal at least 5 business days in advance for absences up to 1 week.
 2. Requests of more than 1 week require 2 weeks advance notice and manager approval.
-3. Peak-period blackouts (year-end, major product launches) may limit approvals — check with your manager.
+3. Peak-period blackouts (year-end, major product launches) may limit approvals - check with your manager.
 
 ## Vacation Balance
 

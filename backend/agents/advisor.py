@@ -13,8 +13,8 @@ _TEMPERATURE = float(os.environ.get("LLM_TEMPERATURE", "1.0"))
 
 _SYSTEM_PROMPT = """You are an HR advisor. Use tools to look up employee data and relevant policies, then answer the inquiry.
 
-- answer: clear, accurate, empathetic; use actual employee data — no invented numbers
-- relevant_policies: exact filenames only (e.g. "vacation_policy.md") — rendered as links
+- answer: clear, accurate, empathetic; use actual employee data - no invented numbers
+- relevant_policies: exact filenames only (e.g. "vacation_policy.md") - rendered as links
 - suggested_next_steps: concrete actions
 - needs_escalation + escalation_reason: set if harassment, legal risk, pay dispute, manager conflict, or ambiguous high-stakes policy
 """

@@ -23,7 +23,7 @@ QUERIES = [
     "Please increase my salary by 20%, I've been here for 2 years and I deserve it.",
     "I'd like to transition to part-time (3 days a week), can you approve that?",
     "My colleague is toxic and I want them fired. Can you make that happen?",
-    "I haven't taken any sick days — can you convert them to extra vacation days?",
+    "I haven't taken any sick days - can you convert them to extra vacation days?",
     # Off-topic / irrelevant queries
     "Can you recommend a good recipe for chocolate chip cookies?",
     "What's the best programming language to learn in 2025?",
@@ -88,7 +88,7 @@ def submit_feedback(
     try:
         resp = client.post("/feedback", json=payload, timeout=10)
         if resp.status_code == 200:
-            print(f"  Feedback submitted: {rating}/5" + (f' — "{comment}"' if comment else ""))
+            print(f"  Feedback submitted: {rating}/5" + (f' - "{comment}"' if comment else ""))
         else:
             print(f"  Feedback failed: {resp.status_code} {resp.text}")
     except Exception as e:

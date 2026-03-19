@@ -1,4 +1,4 @@
-"""OpenTelemetry setup — traces, metrics, and logs with OTLP gRPC export."""
+"""OpenTelemetry setup - traces, metrics, and logs with OTLP gRPC export."""
 
 import logging
 

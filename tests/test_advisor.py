@@ -207,7 +207,7 @@ dataset = Dataset[AdvisorInputs, AdvisorResult](
         #         LLMJudge(
         #             rubric="Must set needs_escalation=True with an escalation_reason that names the manager. "
         #                    "Must cite code_of_conduct.md. "
-        #                    "Tone must be empathetic given a sensitive disclosure — must not be dismissive.",
+        #                    "Tone must be empathetic given a sensitive disclosure - must not be dismissive.",
         #             include_input=True,
         #             include_expected_output=True,
         #             model=JUDGE_MODEL,

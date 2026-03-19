@@ -100,7 +100,7 @@ async def inquiry(
             try:
                 file_contents.append(raw.decode("utf-8"))
             except UnicodeDecodeError:
-                file_contents.append(f"[Binary file: {f.filename} — cannot display]")
+                file_contents.append(f"[Binary file: {f.filename} - cannot display]")
 
     employee_record = await get_employee(db_pool, employee_id)
     employee_name = employee_record["name"] if employee_record else None
@@ -117,7 +117,7 @@ async def inquiry(
         else:
             intake = await run_intake(message, file_contents, employee_id=employee_id, employee_name=employee_name)
 
-        # 3. Direct escalation path (intake flagged it — skip advisor agent)
+        # 3. Direct escalation path (intake flagged it - skip advisor agent)
         if intake.route_to_escalation:
             await run_direct_escalation(inquiry=message, intake=intake)
             wf.output = ESCALATION_MESSAGE

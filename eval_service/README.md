@@ -4,92 +4,65 @@ An LLM-as-judge evaluation service that continuously monitors HR agent traces an
 
 ## Overview
 
-The service polls [Tempo](../docker-compose.yml) for recent traces, extracts agent inputs/outputs, and uses GPT-4o-mini as a judge to evaluate quality. Results are emitted as `gen_ai.evaluation.result` log events linked to the original trace.
+The service polls [Tempo](../docker-compose.yml) for recent traces, extracts agent inputs/outputs, and uses `gpt-4o-mini` as a judge to evaluate quality. Results are emitted as `gen_ai.evaluation.result` log events linked to the original trace.
 
 ## What Is Evaluated
 
-There are two evaluation scenarios depending on what the review agent decided:
-
-### Scenario A: Policy Response (4 metrics)
-
-Runs when the **policy agent produced a response** (regardless of whether review escalated or approved it).
+Every `invoke_workflow` span is evaluated with **all** metrics - both the policy judge and the escalation judge run on every trace.
 
 | Metric | Passes when... |
-|--------|----------------|
+| --- | --- |
+| `workflow_health` | The workflow span has no error |
 | `response_relevance` | The response directly addresses the employee's actual question |
 | `policy_groundedness` | Every factual claim is consistent with the HR knowledge base |
 | `response_tone` | The response is professional, empathetic, and appropriate for HR context |
 | `answer_completeness` | The response addresses all parts of the question with sufficient detail and next steps |
-
-### Scenario B: Direct Escalation (1 metric)
-
-Runs when the **review agent escalated without a policy response** (intake → review, policy agent skipped).
-
-| Metric | Passes when... |
-|--------|----------------|
-| `review_decision_correctness` | Escalating to a human HR professional was the right call (e.g., harassment, discrimination, legal threat, safety risk) |
+| `review_decision_correctness` | The routing decision was correct - escalation for serious cases (harassment, legal risk), direct answer for routine ones |
 
 ## Prompts Used
 
 ### Policy Response Judge
 
 - **Model**: `gpt-4o-mini`, temperature=0, JSON response format
-- **System prompt**: Built dynamically by loading all `*.md` files from `backend/knowledge_base/` as ground truth. Instructs the judge to return binary pass/fail for each of the 4 metrics with a one-sentence reason.
+- **System prompt**: Built dynamically by loading all `*.md` files from `backend/knowledge_base/` as ground truth. Instructs the judge to return binary pass/fail for each of the 4 quality metrics with a one-sentence reason.
 - **User content**:
   ```
   Employee inquiry:
-  <inquiry extracted from the intake agent span>
+  <gen_ai.input.messages from the workflow span, fetched from S3 if stored via _ref>
 
   Final response:
-  <policy agent's response>
-
-  Full chat history:
-  <chat history downloaded from S3 via span attribute gen_ai.output.messages_ref>
+  <gen_ai.output.messages from the workflow span, fetched from S3 if stored via _ref>
   ```
 
 ### Escalation Judge
 
 - **Model**: `gpt-4o-mini`, temperature=0, JSON response format
-- **System prompt**: Evaluates only `review_decision_correctness` — whether direct escalation was appropriate.
+- **System prompt**: Evaluates `review_decision_correctness` - whether escalating to a human vs. answering directly was the right call.
 - **User content**:
   ```
   Employee inquiry:
-  <inquiry>
+  <gen_ai.input.messages>
 
-  Handoff summary prepared for HR:
-  <handoff summary from the review agent>
-
-  Review reasoning:
-  <review agent's reasoning>
+  Actual response:
+  <gen_ai.output.messages>
   ```
 
-## Which Evals Run on Which Paths
-
-```
-intake ──► policy ──► review
-               │          │
-               │      escalate  →  review_decision_correctness
-               │
-           policy answer exists  →  response_relevance
-                                     policy_groundedness
-                                     response_tone
-                                     answer_completeness
-```
+## How Traces Are Found
 
 The service searches Tempo for spans matching:
 
 ```traceql
-{span.gen_ai.agent.name="review" && span.gen_ai.operation.name="invoke_agent"}
+{resource.service.name="hallucHR" && span.gen_ai.operation.name="invoke_workflow"}
 ```
 
-It then walks the trace to find spans from the `intake` and `policy` agents and reconstructs the full conversation context.
+It then evaluates each matching span directly using its `gen_ai.input.messages` and `gen_ai.output.messages` attributes (falling back to S3 via `_ref` variants).
 
 ## Evaluation Output
 
-Each metric is emitted as an event correlated with the review span:
+Each metric is emitted as an event on the `invoke_workflow` span:
 
 | Attribute | Value |
-|-----------|-------|
+| --- | --- |
 | `gen_ai.evaluation.name` | Metric name (e.g., `response_relevance`) |
 | `gen_ai.evaluation.score.value` | `1.0` (pass) or `0.0` (fail) |
 | `gen_ai.evaluation.explanation` | One-sentence reason from the judge |
@@ -97,9 +70,10 @@ Each metric is emitted as an event correlated with the review span:
 ## Configuration
 
 | Env var | Default | Description |
-|---------|---------|-------------|
-| `POLL_INTERVAL_SECONDS` | `120` | How often to search for new traces |
-| `LOOKBACK_SECONDS` | `300` | How far back to search for traces |
-| `OPENAI_API_KEY` | required | API key for the judge model |
+| --- | --- | --- |
+| `EVAL_INTERVAL_SECONDS` | `10` | How often to poll for new traces |
+| `EVAL_LOOKBACK_SECONDS` | `60` | How far back to search on each poll |
+| `EVAL_INITIAL_LOOKBACK_SECONDS` | `3600` | How far back to search on first start (before cursor exists) |
+| `OPENAI_API_KEY` | required | API key for the judge model (falls back from `OPENAI_API_KEY_EVAL`) |
 
-Traces are deduplicated in memory to avoid re-evaluating the same trace across polling cycles.
+Evaluated spans are deduplicated using a cursor file (`eval_cursor.txt`) that persists the last processed timestamp across restarts. An in-memory set additionally prevents re-evaluation within the same process run.

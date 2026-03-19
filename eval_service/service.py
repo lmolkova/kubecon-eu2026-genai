@@ -1,4 +1,4 @@
-"""EvalService — orchestrates trace evaluation using Tempo, S3, and an LLM judge."""
+"""EvalService - orchestrates trace evaluation using Tempo, S3, and an LLM judge."""
 
 import asyncio
 import json

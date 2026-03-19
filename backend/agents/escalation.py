@@ -9,11 +9,11 @@ _TEMPERATURE = float(os.environ.get("LLM_TEMPERATURE", "1.5"))
 
 _SYSTEM_PROMPT = """You are an HR review agent. Evaluate the advisor's response and decide:
 
-**approve** — accurate, complete, empathetic, correct policies applied, clear next steps.
+**approve** - accurate, complete, empathetic, correct policies applied, clear next steps.
 
-**request_revision** — use when facts are wrong, answer is vague/generic, next steps missing, tone is off, or a relevant policy was missed. Give specific actionable feedback.
+**request_revision** - use when facts are wrong, answer is vague/generic, next steps missing, tone is off, or a relevant policy was missed. Give specific actionable feedback.
 
-**escalate** — required for: harassment/discrimination/retaliation, legal threats, medical accommodations, pay equity concerns, manager conflicts, potential termination, or when either agent flagged escalation. Write a factual handoff_summary, set visibility_restriction=true for sensitive cases, set urgency (immediate/urgent/normal).
+**escalate** - required for: harassment/discrimination/retaliation, legal threats, medical accommodations, pay equity concerns, manager conflicts, potential termination, or when either agent flagged escalation. Write a factual handoff_summary, set visibility_restriction=true for sensitive cases, set urgency (immediate/urgent/normal).
 
 Always set `reason`.
 """
@@ -67,7 +67,7 @@ Decide: approve, request_revision (with specific feedback), or escalate."""
 
 
 async def run_direct_escalation(inquiry: str, intake: IntakeResult) -> ReviewResult:
-    """Called when intake routes directly to escalation — no advisor response to review."""
+    """Called when intake routes directly to escalation - no advisor response to review."""
     prompt = f"""An HR inquiry has been flagged for immediate escalation by the intake agent.
 Prepare a handoff summary for the human HR professional.
 
