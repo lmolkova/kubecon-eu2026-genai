@@ -25,11 +25,10 @@ class IntakeResult(BaseModel):
     inquiry_type: InquiryType
     severity: Severity
     summary: str  # 1-sentence restatement of the inquiry
-    missing_info: list[str]  # questions to ask the employee
-    route_to_escalation: bool  # skip policy agent, go straight to human
+    route_to_escalation: bool  # skip advisor agent, go straight to human
 
 
-class PolicyResult(BaseModel):
+class AdvisorResult(BaseModel):
     answer: str
     relevant_policies: list[str]
     suggested_next_steps: list[str]
@@ -39,7 +38,7 @@ class PolicyResult(BaseModel):
 
 class ReviewDecision(str, Enum):
     approve = "approve"             # response is good, deliver to employee
-    request_revision = "request_revision"  # policy agent should revise with feedback
+    request_revision = "request_revision"  # advisor should revise with feedback
     escalate = "escalate"           # hand off to a human HR professional
 
 
@@ -60,10 +59,10 @@ class FeedbackRequest(BaseModel):
     span_id: str | None = None    # hex span-id from the inquiry SSE done event
 
 
-# ---- Runtime deps for policy agent ----
+# ---- Runtime deps for advisor agent ----
 
 @dataclass
-class PolicyDeps:
+class AdvisorDeps:
     employee_id: str
     db_pool: object  # asyncpg Pool
     knowledge_base_path: str

@@ -6,6 +6,7 @@ python-multipart>=0.0.9
 
 opentelemetry-instrumentation-fastapi>=0.61b0
 opentelemetry-instrumentation-httpx>=0.61b0
+opentelemetry-instrumentation-asyncpg>=0.61b0
 opentelemetry-semantic-conventions>=0.61b0
 #opentelemetry-instrumentation-openai-v2 installed from source in Dockerfile
 opentelemetry-sdk>=1.40.0

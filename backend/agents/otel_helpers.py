@@ -7,18 +7,29 @@ Implements:
   - gen_ai.client.token.usage metric            (gen-ai-metrics.md)
 """
 
+import dataclasses
 import json
+import os
 import time
 from contextlib import contextmanager
 from typing import Any
 
 from opentelemetry import metrics, trace, _logs
 from opentelemetry._logs import SeverityNumber
-from opentelemetry.trace import NonRecordingSpan, SpanContext, SpanKind, StatusCode, TraceFlags
+from opentelemetry.trace import NonRecordingSpan, Span, SpanContext, SpanKind, StatusCode, TraceFlags
+from opentelemetry.util.genai.completion_hook import load_completion_hook
+from opentelemetry.util.genai.types import InputMessage, OutputMessage, Text
+from pydantic_ai.messages import ModelRequest, ModelResponse, TextPart, UserPromptPart
 
-_tracer = trace.get_tracer("hr-ai-assistant", "0.1.0")
-_meter = metrics.get_meter("hr-ai-assistant", "0.1.0")
-_logger = _logs.get_logger("hr-ai-assistant", "0.1.0")
+_CAPTURE_MESSAGE_CONTENT_ENVVAR = "OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT"
+
+
+_capture_on_span: bool = os.environ.get(_CAPTURE_MESSAGE_CONTENT_ENVVAR, "").lower() == "span_only"
+
+_tracer = trace.get_tracer("halluchr", "0.1.0")
+_meter = metrics.get_meter("halluchr", "0.1.0")
+_logger = _logs.get_logger("halluchr", "0.1.0")
+_completion_hook = load_completion_hook()
 
 _operation_duration = _meter.create_histogram(
     "gen_ai.client.operation.duration",
@@ -31,6 +42,22 @@ _token_usage = _meter.create_histogram(
     unit="{token}",
     description="Number of tokens used in GenAI operations.",
 )
+
+
+def _build_input_messages(message_history, prompt: str) -> list[InputMessage]:
+    """Convert pydantic-ai message history + current prompt to InputMessage list."""
+    inputs: list[InputMessage] = []
+    for msg in (message_history or []):
+        if isinstance(msg, ModelResponse):
+            texts = [Text(p.content) for p in msg.parts if isinstance(p, TextPart)]
+            if texts:
+                inputs.append(InputMessage(role="assistant", parts=texts))
+        elif isinstance(msg, ModelRequest):
+            texts = [Text(p.content) for p in msg.parts if isinstance(p, UserPromptPart) and isinstance(p.content, str)]
+            if texts:
+                inputs.append(InputMessage(role="user", parts=texts))
+    inputs.append(InputMessage(role="user", parts=[Text(prompt)]))
+    return inputs
 
 
 def _parse_model_string(model_str: str) -> tuple[str, str]:
@@ -49,6 +76,7 @@ async def run_agent(
     model_str: str,
     system_prompt: str | None = None,
     deps=None,
+    message_history=None,
 ):
     """Run a pydantic-ai agent wrapped in an invoke_agent span with metrics.
 
@@ -85,21 +113,31 @@ async def run_agent(
         kind=SpanKind.INTERNAL,
         attributes=span_attrs,
     ) as span:
-        # Opt-in attributes: system instructions and input messages
-        # gen_ai.system_instructions: List[MessagePart]  (no role — just parts)
-        if system_prompt:
+        if span.is_recording() or _capture_on_span:
+            sys_parts = [Text(system_prompt)] if system_prompt else []
+            input_messages = _build_input_messages(message_history, prompt)
+        else:
+            sys_parts = []
+            input_messages = []
+
+        if span.is_recording() and _capture_on_span:
+            if sys_parts:
+                span.set_attribute(
+                    "gen_ai.system_instructions",
+                    json.dumps([dataclasses.asdict(p) for p in sys_parts]),
+                )
             span.set_attribute(
-                "gen_ai.system_instructions",
-                json.dumps([{"type": "text", "content": system_prompt}]),
+                "gen_ai.input.messages",
+                json.dumps([dataclasses.asdict(m) for m in input_messages]),
             )
-        # gen_ai.input.messages: List[ChatMessage]  (role + parts)
-        span.set_attribute(
-            "gen_ai.input.messages",
-            json.dumps([{"role": "user", "parts": [{"type": "text", "content": prompt}]}]),
-        )
 
         try:
-            result = await agent.run(prompt, deps=deps) if deps is not None else await agent.run(prompt)
+            kwargs = {}
+            if deps is not None:
+                kwargs["deps"] = deps
+            if message_history is not None:
+                kwargs["message_history"] = message_history
+            result = await agent.run(prompt, **kwargs)
 
             # Record usage on the span
             usage = result.usage()
@@ -114,20 +152,25 @@ async def run_agent(
             if usage.cache_read_tokens:
                 span.set_attribute("gen_ai.usage.cache_read.input_tokens", usage.cache_read_tokens)
 
-            # Opt-in: serialise structured output as output message
-            # gen_ai.output.messages: List[OutputMessage]  (role + parts + finish_reason)
-            output = result.output
-            output_content = (
-                json.dumps(output.model_dump()) if hasattr(output, "model_dump") else str(output)
-            )
-            span.set_attribute(
-                "gen_ai.output.messages",
-                json.dumps([{
-                    "role": "assistant",
-                    "parts": [{"type": "text", "content": output_content}],
-                    "finish_reason": "stop",
-                }]),
-            )
+            if span.is_recording():
+                output = result.output
+                output_content = (
+                    json.dumps(output.model_dump()) if hasattr(output, "model_dump") else str(output)
+                )
+                output_messages = [OutputMessage(role="assistant", parts=[Text(output_content)], finish_reason="stop")]
+
+                if _capture_on_span:
+                    span.set_attribute(
+                        "gen_ai.output.messages",
+                        json.dumps([dataclasses.asdict(m) for m in output_messages]),
+                    )
+
+                _completion_hook.on_completion(
+                    inputs=input_messages,
+                    outputs=output_messages,
+                    system_instruction=sys_parts,
+                    span=span,
+                )
 
             _operation_duration.record(time.monotonic() - start, metric_attrs)
             return result
@@ -181,6 +224,66 @@ def emit_evaluation_event(
         severity_number=SeverityNumber.INFO,
         attributes=attrs,
     )
+
+
+class WorkflowContext:
+    """Yielded by :func:`workflow_span` so callers can record the final output."""
+
+    def __init__(self, span: Span) -> None:
+        self.span = span
+        self.output: str | None = None
+
+
+@contextmanager
+def workflow_span(workflow_name: str, *, user_input: str):
+    """Context manager that wraps a multi-agent workflow in an invoke_workflow span.
+
+    Args:
+        workflow_name: Human-readable name for the workflow (gen_ai.workflow.name).
+        user_input:    The original user message (recorded as input message).
+
+    Yields a :class:`WorkflowContext`.  Set ``ctx.output`` before exiting the
+    block so the completion hook (and optional span attribute) receive the
+    final response text.
+    """
+    span_attrs: dict[str, Any] = {
+        "gen_ai.operation.name": "invoke_workflow",
+        "gen_ai.workflow.name": workflow_name,
+    }
+
+    with _tracer.start_as_current_span(
+        f"invoke_workflow {workflow_name}",
+        kind=SpanKind.INTERNAL,
+        attributes=span_attrs,
+    ) as span:
+        if span.is_recording() and _capture_on_span:
+            input_messages = [InputMessage(role="user", parts=[Text(user_input)])]
+            span.set_attribute(
+                "gen_ai.input.messages",
+                json.dumps([dataclasses.asdict(m) for m in input_messages]),
+            )
+
+        ctx = WorkflowContext(span)
+        try:
+            yield ctx
+        except Exception as exc:
+            span.set_status(StatusCode.ERROR, str(exc))
+            span.set_attribute("error.type", type(exc).__qualname__)
+            raise
+        else:
+            if span.is_recording() and ctx.output is not None:
+                output_messages = [OutputMessage(role="assistant", parts=[Text(ctx.output)], finish_reason="stop")]
+                if _capture_on_span:
+                    span.set_attribute(
+                        "gen_ai.output.messages",
+                        json.dumps([dataclasses.asdict(m) for m in output_messages]),
+                    )
+                _completion_hook.on_completion(
+                    inputs=[InputMessage(role="user", parts=[Text(user_input)])],
+                    outputs=output_messages,
+                    system_instruction=[],
+                    span=span,
+                )
 
 
 @contextmanager

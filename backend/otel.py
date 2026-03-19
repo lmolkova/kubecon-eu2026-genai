@@ -11,8 +11,11 @@ from opentelemetry.sdk._logs import LoggerProvider, LoggingHandler, LogRecordPro
 from opentelemetry.sdk._logs.export import BatchLogRecordProcessor
 from opentelemetry.sdk.metrics import MeterProvider
 from opentelemetry.sdk.metrics.export import PeriodicExportingMetricReader
+from opentelemetry.sdk.metrics.view import View
+from opentelemetry.sdk.metrics._internal.aggregation import ExplicitBucketHistogramAggregation
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExporter, SpanExportResult
+from opentelemetry.instrumentation.asyncpg import AsyncPGInstrumentor
 from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 from opentelemetry.instrumentation.openai_v2 import OpenAIInstrumentor
 
@@ -53,6 +56,7 @@ def configure_opentelemetry() -> None:
     _configure_traces()
     _configure_metrics()
     _configure_logs()
+    AsyncPGInstrumentor().instrument()
     HTTPXClientInstrumentor().instrument()
     OpenAIInstrumentor().instrument()
 
@@ -70,7 +74,17 @@ def _configure_metrics() -> None:
         OTLPMetricExporter(),
         export_interval_millis=10_000,
     )
-    provider = MeterProvider(metric_readers=[reader])
+    # Enforce Gen AI semantic convention bucket boundaries (seconds) for
+    # gen_ai.client.operation.duration across all meters/instrumentations.
+    # Without this, the manual histogram and the auto-instrumented one use
+    # different default boundaries, producing an invalid merged histogram.
+    gen_ai_duration_view = View(
+        instrument_name="gen_ai.client.operation.duration",
+        aggregation=ExplicitBucketHistogramAggregation(
+            boundaries=[0.01, 0.02, 0.04, 0.08, 0.16, 0.32, 0.64, 1.28, 2.56, 5.12, 10.24, 20.48, 40.96, 81.92]
+        ),
+    )
+    provider = MeterProvider(metric_readers=[reader], views=[gen_ai_duration_view])
     metrics.set_meter_provider(provider)
 
 

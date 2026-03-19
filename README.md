@@ -1,10 +1,10 @@
-# HR AI Assistant
+# HallucHR
 
 A demo HR AI assistant built with [pydantic-ai](https://ai.pydantic.dev/), FastAPI, and PostgreSQL, with full OpenTelemetry observability (traces, metrics, logs) exported to a local Grafana LGTM stack.
 
 ## Architecture
 
-```
+```text
 Employee (browser)
    │  POST /inquiry (multipart/form-data)
    ▼
@@ -14,7 +14,7 @@ FastAPI backend
    │
    ├── [direct escalation path if intake.route_to_escalation=true]
    │
-   ├── 2. Policy Agent        — look up HR data + policies, answer
+   ├── 2. Advisor Agent        — look up HR data + policies, answer
    │        ▲  │ revision feedback (up to 2 rounds)
    │        │  ▼
    └── 3. Review Agent        — approve / request revision / escalate
@@ -35,49 +35,15 @@ Docker Compose includes [Grafana LGTM](https://github.com/grafana/docker-otel-lg
 
 ### Prerequisites
 
-- Python 3.12+
 - Docker + Docker Compose
 - An OpenAI API key
-
-### 1. Start PostgreSQL and the Grafana LGTM stack
-
-```bash
-docker-compose up postgres lgtm -d
-```
-
-### 2. Install dependencies
-
-```bash
-cd backend
-pip install -r requirements.txt
-```
-
-### 3. Set environment variables
-
-```bash
-export OPENAI_API_KEY=sk-...
-export DATABASE_URL=postgresql://hr_user:hr_pass@localhost:5432/hr_db
-export OTEL_SERVICE_NAME=hr-ai-assistant
-export OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:4317
-export OTEL_EXPORTER_OTLP_PROTOCOL=grpc
-export OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental
-export OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=span_only
-```
-
-### 4. Run the backend
-
-```bash
-uvicorn backend.main:app --reload
-```
-
-The app (and the frontend) is served at **[localhost:8000](http://localhost:8000)**.
-Grafana is available at **[localhost:3000](http://localhost:3000)**.
-
-### Run everything with Docker Compose
 
 ```bash
 OPENAI_API_KEY=sk-... docker-compose up --build
 ```
+
+The app (and the frontend) is served at **[localhost:8000](http://localhost:8000)**.
+Grafana is available at **[localhost:3000](http://localhost:3000)**.
 
 ## Test Scenarios
 
@@ -98,3 +64,8 @@ Login with employee ID as username and `pas$word1!` as password.
 - `GET /employees/{employee_id}` — inspect a seeded employee record (debug)
   - Available IDs: E001 through E006
 - `GET /policies/<filename>` — serve knowledge base markdown files
+
+## TODOs
+
+1. Dashboard
+2. OpenSearch

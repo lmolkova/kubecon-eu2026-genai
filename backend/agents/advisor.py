@@ -1,45 +1,35 @@
 import json
+import os
 from pathlib import Path
 
 from pydantic_ai import Agent, RunContext
 
-from backend.models import PolicyDeps, PolicyResult
+from backend.models import AdvisorDeps, AdvisorResult
 import backend.database as db
 from backend.agents.otel_helpers import run_agent, tool_span
 
-_MODEL = "openai:gpt-4o"
+_MODEL = os.environ.get("LLM_MODEL", "openai:gpt-4o")
+_TEMPERATURE = float(os.environ.get("LLM_TEMPERATURE", "1.0"))
 
-_SYSTEM_PROMPT = """You are the policy and case agent for an HR AI assistant.
+_SYSTEM_PROMPT = """You are an HR advisor. Use tools to look up employee data and relevant policies, then answer the inquiry.
 
-Your job is to:
-1. Use your tools to look up the employee's HR data (country, role, salary, vacation balance, etc.)
-   and to search company policies relevant to the inquiry.
-2. Provide a clear, accurate, and empathetic answer to the employee's question.
-3. List the exact filenames of the policy documents you referenced in `relevant_policies`
-   (e.g. "vacation_policy.md", "leave_policy.md", "compensation_policy.md", "code_of_conduct.md").
-   Use only the actual filenames — they will be rendered as clickable links for the employee.
-4. Suggest concrete next steps the employee should take.
-5. Set needs_escalation=true if the situation requires human HR review — for example:
-   - The inquiry involves harassment, discrimination, or retaliation.
-   - There is a potential legal or compliance issue.
-   - The employee disputes pay in a way that may indicate inequity.
-   - The situation involves a manager conflict.
-   - The policy is ambiguous and the stakes are high.
-   In those cases, also provide a brief escalation_reason.
-
-Always use the employee's actual data when answering. Do not make up numbers.
+- answer: clear, accurate, empathetic; use actual employee data — no invented numbers
+- relevant_policies: exact filenames only (e.g. "vacation_policy.md") — rendered as links
+- suggested_next_steps: concrete actions
+- needs_escalation + escalation_reason: set if harassment, legal risk, pay dispute, manager conflict, or ambiguous high-stakes policy
 """
 
-policy_agent = Agent(
+advisor_agent = Agent(
     _MODEL,
-    deps_type=PolicyDeps,
-    output_type=PolicyResult,
+    deps_type=AdvisorDeps,
+    output_type=AdvisorResult,
     system_prompt=_SYSTEM_PROMPT,
+    model_settings={'temperature': _TEMPERATURE, 'max_tokens': 1000},
 )
 
 
-@policy_agent.tool
-async def get_employee_info(ctx: RunContext[PolicyDeps]) -> dict:
+@advisor_agent.tool
+async def get_employee_info(ctx: RunContext[AdvisorDeps]) -> dict:
     """Retrieve the current employee's HR record from the database."""
     with tool_span("get_employee_info", call_id=ctx.tool_call_id) as span:
         record = await db.get_employee(ctx.deps.db_pool, ctx.deps.employee_id)
@@ -53,9 +43,28 @@ async def get_employee_info(ctx: RunContext[PolicyDeps]) -> dict:
         span.set_attribute("gen_ai.tool.call.result", json.dumps(result))
         return result
 
+@advisor_agent.tool
+async def get_employee_info_by_name(ctx: RunContext[AdvisorDeps], employee_name: str) -> dict:
+    """Retrieve the current employee's HR record from the database by name."""
+    with tool_span(
+        "get_employee_info_by_name",
+        call_id=ctx.tool_call_id,
+        arguments={"employee_name": employee_name},
+    ) as span:
+        record = await db.get_employee_by_name(ctx.deps.db_pool, employee_name)
+        if record is None:
+            result = {"error": f"No employee found with name {employee_name}"}
+        else:
+            result = {
+                k: (str(v) if not isinstance(v, (str, int, float, bool, type(None))) else v)
+                for k, v in record.items()
+            }
+        span.set_attribute("gen_ai.tool.call.result", json.dumps(result))
+        return result
 
-@policy_agent.tool
-async def get_manager_info(ctx: RunContext[PolicyDeps], manager_id: str) -> dict:
+
+@advisor_agent.tool
+async def get_manager_info(ctx: RunContext[AdvisorDeps], manager_id: str) -> dict:
     """Retrieve a manager's basic HR record by their employee ID."""
     with tool_span(
         "get_manager_info",
@@ -74,8 +83,8 @@ async def get_manager_info(ctx: RunContext[PolicyDeps], manager_id: str) -> dict
         return result
 
 
-@policy_agent.tool
-async def search_policies(ctx: RunContext[PolicyDeps], topic: str) -> str:
+@advisor_agent.tool
+async def search_policies(ctx: RunContext[AdvisorDeps], topic: str) -> str:
     """Search company policy documents for content relevant to the given topic.
 
     Args:
@@ -106,58 +115,54 @@ async def search_policies(ctx: RunContext[PolicyDeps], topic: str) -> str:
         else:
             result = "\n\n---\n\n".join(results)
 
-        span.set_attribute("gen_ai.tool.call.result", result[:4096])  # truncate for span safety
+        span.set_attribute("gen_ai.tool.call.result", result)  # truncate for span safety
         return result
 
 
-async def run_policy(
+async def run_advisor(
     employee_id: str,
     db_pool,
     knowledge_base_path: str,
     inquiry: str,
     intake_summary: str,
-    revision_feedback: str | None = None,
-) -> PolicyResult:
-    """Run the policy agent for the given employee inquiry.
+    feedback: str | None = None,
+    message_history=None,
+) -> tuple[AdvisorResult, list]:
+    """Run the advisor agent for the given employee inquiry.
 
-    If revision_feedback is provided, the agent is asked to revise its previous response
-    based on the review agent's critique.
+    On the first call, pass inquiry + intake_summary with no message_history.
+    On revision calls, pass the feedback as the new user turn along with
+    message_history from the prior run so the model sees the full conversation.
+
+    Returns (AdvisorResult, all_messages) so the caller can thread messages
+    into the next revision round.
     """
-    deps = PolicyDeps(
+    deps = AdvisorDeps(
         employee_id=employee_id,
         db_pool=db_pool,
         knowledge_base_path=knowledge_base_path,
     )
 
-    if revision_feedback:
-        prompt = f"""You previously answered an HR inquiry but the review agent requested a revision.
-
---- Original employee inquiry ---
-{inquiry}
-
-Intake summary: {intake_summary}
-
---- Review agent feedback ---
-{revision_feedback}
-
-Please look up the employee's data and relevant policies again as needed, then provide
-an improved answer that addresses all of the reviewer's concerns."""
+    if message_history is not None:
+        # Revision round: just send the reviewer's feedback as a new user turn.
+        prompt = feedback
     else:
         prompt = f"""Employee inquiry (already triaged by intake agent):
 
-Intake summary: {intake_summary}
-
-Full employee message:
+--- Employee inquiry ---
 {inquiry}
+
+Intake summary: {intake_summary}
 
 Please look up the employee's data and relevant policies, then answer the inquiry."""
 
     result = await run_agent(
-        policy_agent,
+        advisor_agent,
         prompt,
-        agent_name="policy",
+        agent_name="advisor",
         model_str=_MODEL,
         system_prompt=_SYSTEM_PROMPT,
         deps=deps,
+        message_history=message_history,
     )
-    return result.output
+    return result.output, result.all_messages()

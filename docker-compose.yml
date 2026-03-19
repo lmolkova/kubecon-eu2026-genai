@@ -6,7 +6,7 @@ services:
       - "4317:4317"   # OTLP gRPC
       - "4318:4318"   # OTLP HTTP
     volumes:
-      - ./otelcol/config.yaml:/etc/otelcol/config.yaml
+      - ./configs/otelcol/config.yaml:/etc/otelcol/config.yaml
     depends_on:
       - tempo
       - loki
@@ -18,7 +18,7 @@ services:
     ports:
       - "3200:3200"   # Tempo HTTP API (also used by Grafana MCP for trace queries)
     volumes:
-      - ./tempo/tempo.yaml:/etc/tempo/tempo.yaml
+      - ./configs/tempo/tempo.yaml:/etc/tempo/tempo.yaml
       - tempo_data:/var/tempo
 
   loki:
@@ -28,8 +28,14 @@ services:
     ports:
       - "3100:3100"   # Loki HTTP API
     volumes:
-      - ./loki/loki.yaml:/etc/loki/loki.yaml
+      - ./configs/loki/loki.yaml:/etc/loki/loki.yaml
       - loki_data:/loki
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:3100/ready || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
 
   mimir:
     image: grafana/mimir:latest
@@ -38,7 +44,7 @@ services:
     ports:
       - "9009:9009"   # Mimir HTTP API / Prometheus-compatible endpoint
     volumes:
-      - ./mimir/mimir.yaml:/etc/mimir/mimir.yaml
+      - ./configs/mimir/mimir.yaml:/etc/mimir/mimir.yaml
       - mimir_data:/data/mimir
 
   grafana:
@@ -56,9 +62,12 @@ services:
       - ./grafana/provisioning:/etc/grafana/provisioning
       - grafana_data:/var/lib/grafana
     depends_on:
-      - tempo
-      - loki
-      - mimir
+      tempo:
+        condition: service_started
+      loki:
+        condition: service_started
+      mimir:
+        condition: service_started
 
   postgres:
     image: postgres:16
@@ -81,7 +90,7 @@ services:
     ports:
       - "9090:9090"
     environment:
-      initialBuckets: hr-assistant-chats
+      initialBuckets: halluchr-chats
 
   backend:
     build:
@@ -90,19 +99,22 @@ services:
     ports:
       - "8000:8000"
     environment:
-      DATABASE_URL: postgresql://hr_user:hr_pass@postgres:5432/hr_db
-      OPENAI_API_KEY: ${OPENAI_API_KEY}
-      OTEL_SERVICE_NAME: hr-ai-assistant
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
-      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
-      OTEL_SEMCONV_STABILITY_OPT_IN: gen_ai_latest_experimental
-      #OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT: span_only
-      OTEL_INSTRUMENTATION_GENAI_COMPLETION_HOOK: upload
-      OTEL_INSTRUMENTATION_GENAI_UPLOAD_BASE_PATH: s3://hr-assistant-chats/
-      AWS_ENDPOINT_URL: http://s3mock:9090
-      AWS_ACCESS_KEY_ID: test
-      AWS_SECRET_ACCESS_KEY: test
-      AWS_DEFAULT_REGION: us-east-1
+      - DATABASE_URL=postgresql://hr_user:hr_pass@postgres:5432/hr_db
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_BASE_URL
+      - LLM_TEMPERATURE
+      - LLM_MODEL=${LLM_MODEL:-openai:gpt-4o}
+      - OTEL_SERVICE_NAME=hallucHR
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_EXPORTER_OTLP_PROTOCOL=grpc
+      - OTEL_SEMCONV_STABILITY_OPT_IN=gen_ai_latest_experimental,http,database
+      - OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT=span_only
+      #- OTEL_INSTRUMENTATION_GENAI_COMPLETION_HOOK=upload
+      - OTEL_INSTRUMENTATION_GENAI_UPLOAD_BASE_PATH=s3://halluchr-chats/
+      - AWS_ENDPOINT_URL=http://s3mock:9090
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
+      - AWS_DEFAULT_REGION=us-east-1
     depends_on:
       postgres:
         condition: service_healthy
@@ -113,6 +125,29 @@ services:
     volumes:
       - ./backend:/app/backend
       - ./frontend:/app/frontend
+
+  eval-service:
+    build:
+      context: .
+      dockerfile: eval_service/Dockerfile
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_API_KEY_EVAL: ${OPENAI_API_KEY_EVAL}
+      TEMPO_URL: http://tempo:3200
+      OTEL_SERVICE_NAME: hallucEvals
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+      AWS_ENDPOINT_URL: http://s3mock:9090
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-east-1
+      EVAL_INTERVAL_SECONDS: "120"
+      EVAL_LOOKBACK_SECONDS: "300"
+      OTEL_SEMCONV_STABILITY_OPT_IN: gen_ai_latest_experimental,http
+    depends_on:
+      - tempo
+      - otel-collector
+      - s3mock
 
 volumes:
   postgres_data:

@@ -55,5 +55,15 @@ async def get_employee(pool: asyncpg.Pool, employee_id: str) -> dict | None:
     return dict(row)
 
 
+async def get_employee_by_name(pool: asyncpg.Pool, name: str) -> dict | None:
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT * FROM employees WHERE LOWER(name) = LOWER($1)", name
+        )
+    if row is None:
+        return None
+    return dict(row)
+
+
 async def get_manager(pool: asyncpg.Pool, manager_id: str) -> dict | None:
     return await get_employee(pool, manager_id)

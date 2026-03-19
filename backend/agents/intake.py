@@ -1,40 +1,40 @@
+import os
+
 from pydantic_ai import Agent
 from backend.models import IntakeResult
 from backend.agents.otel_helpers import run_agent
 
-_MODEL = "openai:gpt-4o"
+_MODEL = os.environ.get("LLM_MODEL", "openai:gpt-4o")
+_TEMPERATURE = float(os.environ.get("LLM_TEMPERATURE", "1"))
 
-_SYSTEM_PROMPT = """You are the intake agent for an HR AI assistant.
+_SYSTEM_PROMPT = """You are an HR intake classifier. Classify and route inquiries only — do not answer them.
 
-Your job is to:
-1. Understand what the employee is asking or reporting.
-2. Classify the inquiry type: vacation, leave, compensation, conduct, termination, or general.
-3. Assess severity:
-   - "routine": standard policy question or administrative request
-   - "urgent": time-sensitive but not legally risky (e.g., emergency leave needed tomorrow)
-   - "sensitive": involves legal risk, protected characteristics, harassment, discrimination,
-     retaliation, pay equity complaints, wrongful termination concerns, or medical accommodations
-4. Write a one-sentence summary of the inquiry.
-5. List any information that is missing and would be needed to fully address the request.
-   Note: the employee's identity is already known — never list employee ID, name, or contact
-   details as missing. Only flag missing details about the situation itself (e.g. dates, context).
-6. Set route_to_escalation=true ONLY if the situation is so sensitive that it should bypass
-   the policy agent and go directly to a human HR representative (e.g., harassment report,
-   discrimination allegation, threat of legal action).
-
-Be concise and accurate. Do not attempt to answer the HR question — just classify and route it.
+- type: vacation | leave | compensation | conduct | termination | general
+- severity: routine (standard request) | urgent (time-sensitive) | sensitive (legal risk, harassment, discrimination, pay equity, medical)
+- summary: one sentence
+- missing_info: situation details only (dates, context) — never ask for employee identity
+- route_to_escalation: true only for harassment, discrimination, or legal threats
 """
 
 intake_agent = Agent(
     _MODEL,
     output_type=IntakeResult,
     system_prompt=_SYSTEM_PROMPT,
+    model_settings={'temperature': _TEMPERATURE, 'max_tokens': 1000},
 )
 
 
-async def run_intake(message: str, file_contents: list[str]) -> IntakeResult:
+async def run_intake(message: str, file_contents: list[str], employee_id: str | None = None, employee_name: str | None = None) -> IntakeResult:
     """Run the intake agent on an employee inquiry."""
-    full_input = message
+    prefix = ""
+    if employee_name or employee_id:
+        parts = []
+        if employee_name:
+            parts.append(f"Name: {employee_name}")
+        if employee_id:
+            parts.append(f"Employee ID: {employee_id}")
+        prefix = "Employee: " + ", ".join(parts) + "\n\n"
+    full_input = prefix + message
     if file_contents:
         attachments = "\n\n".join(
             f"--- Attached file {i+1} ---\n{content}"

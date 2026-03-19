@@ -17,6 +17,16 @@ datasources:
         timeShiftEnabled: true
       lokiSearch:
         datasourceUid: loki
+      tracesToLogs:
+        datasourceUid: loki
+        mapTagNamesEnabled: true
+        tags:
+          - key: service.name
+            value: service_name
+        filterByTraceID: true
+        filterBySpanID: false
+        spanStartTimeShift: "-1m"
+        spanEndTimeShift: "1m"
 
   - name: Loki
     type: loki
@@ -27,7 +37,8 @@ datasources:
     jsonData:
       derivedFields:
         - name: TraceID
-          matcherRegex: "traceID=(\\w+)"
+          matcherType: label
+          matcherRegex: trace_id
           url: "$${__value.raw}"
           datasourceUid: tempo
 

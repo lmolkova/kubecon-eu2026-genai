@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>HR AI Assistant</title>
+  <title>HallucHR</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -144,13 +145,17 @@
 
     .info-row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.6rem; }
 
-    p.answer { line-height: 1.6; color: #333; }
+    p.answer, .answer { line-height: 1.6; color: #333; }
+    .answer p { margin-bottom: 0.6rem; }
+    .answer p:last-child { margin-bottom: 0; }
+    .answer a { color: #2d3a8c; text-decoration: underline; }
+    .answer a:hover { color: #1e2870; }
+    .answer ul, .answer ol { padding-left: 1.2rem; margin-bottom: 0.6rem; }
+    .answer li { line-height: 1.7; }
 
     ul.list { padding-left: 1.2rem; color: #444; line-height: 1.7; }
     ul.list a { color: #2d3a8c; text-decoration: underline; }
     ul.list a:hover { color: #1e2870; }
-
-    .missing { color: #b35a00; background: #fff8f0; border-left: 3px solid #f59e0b; padding: 0.5rem 0.8rem; border-radius: 4px; font-size: 0.9rem; margin-top: 0.6rem; }
 
     .escalation-box {
       border-radius: 8px;
@@ -211,7 +216,7 @@
 </div>
 
 <header id="appHeader" style="display:none">
-  <h1>HR AI Assistant</h1>
+  <h1>HallucHR</h1>
   <p>Submit your HR inquiry below. Your information is handled confidentially.</p>
   <div class="user-pill">
     <span id="userLabel"></span>
@@ -241,9 +246,9 @@
   <div id="progress-area" class="stage-card">
     <div class="progress-line"><span class="spinner"></span><span id="progress-msg">Starting...</span></div>
   </div>
-  <div id="intake-card"  class="stage-card" style="display:none"></div>
-  <div id="policy-card"  class="stage-card" style="display:none"></div>
-  <div id="review-card"  class="stage-card" style="display:none"></div>
+  <div id="intake-card"      class="stage-card" style="display:none"></div>
+  <div id="policy-card"      class="stage-card" style="display:none"></div>
+  <div id="escalation-card"  class="stage-card" style="display:none"></div>
 </div>
 
 <div id="feedback-card" class="card">
@@ -337,22 +342,15 @@ function badgeHtml(value, prefix='') {
   return `<span class="${cls}">${cap(value)}</span>`;
 }
 
+let intakeBadges = '';
+
 function renderIntake(data) {
-  const card = document.getElementById('intake-card');
-  const missing = data.missing_info && data.missing_info.length
-    ? `<div class="missing"><strong>Missing info:</strong><ul class="list">${data.missing_info.map(i=>`<li>${i}</li>`).join('')}</ul></div>`
-    : '';
-  card.innerHTML = `
-    <h2>&#128269; Intake Classification</h2>
-    <div class="info-row">
+  intakeBadges = `
+    <div class="info-row" style="margin-bottom:0.8rem">
       ${badgeHtml(data.inquiry_type)}
       ${badgeHtml(data.severity)}
       ${data.route_to_escalation ? badgeHtml('direct escalation','sensitive') : ''}
-    </div>
-    <p class="answer">${data.summary}</p>
-    ${missing}
-  `;
-  card.style.display = 'block';
+    </div>`;
 }
 
 function renderPolicy(data) {
@@ -374,50 +372,22 @@ function renderPolicy(data) {
        <ul class="list">${data.suggested_next_steps.map(s=>`<li>${s}</li>`).join('')}</ul>`
     : '';
   card.innerHTML = `
-    <h2>&#128221; Policy & Case Agent ${roundLabel}</h2>
-    <p class="answer">${data.answer.replace(/\n/g,'<br/>')}</p>
+    <h2>&#128221; Case Agent ${roundLabel}</h2>
+    ${intakeBadges}
+    <div class="answer">${marked.parse(data)}</div>
     ${policies}
     ${steps}
   `;
   card.style.display = 'block';
 }
 
-function renderReview(data) {
-  const card = document.getElementById('review-card');
-  const decision = data.decision; // 'approve' | 'request_revision' | 'escalate'
-  const roundLabel = data.revision_round > 0
-    ? ` <span class="badge badge-revision">Round ${data.revision_round}</span>`
-    : '';
-
-  let boxClass, icon, badge, extras = '';
-
-  if (decision === 'approve') {
-    boxClass = 'ai'; icon = '&#9989;';
-    badge = badgeHtml('approved', 'resolved');
-  } else if (decision === 'request_revision') {
-    boxClass = 'human'; icon = '&#128393;';
-    badge = badgeHtml('revision requested', 'revision');
-    extras = data.feedback
-      ? `<p style="margin-top:0.6rem;font-weight:600;font-size:0.85rem;color:#555;">Feedback for policy agent</p>
-         <p class="answer" style="font-size:0.9rem;">${data.feedback.replace(/\n/g,'<br/>')}</p>`
-      : '';
-  } else { // escalate
-    boxClass = 'human'; icon = '&#128680;';
-    badge = badgeHtml('escalated');
-    extras = `
-      <p style="margin-top:0.6rem;font-size:0.85rem;color:#555;"><strong>Urgency:</strong> ${cap(data.urgency)}</p>
-      ${data.visibility_restriction ? '<p style="font-size:0.85rem;color:#c62828;">&#128274; Marked confidential</p>' : ''}
-      ${data.handoff_summary ? `<p style="margin-top:0.6rem;font-weight:600;font-size:0.85rem;color:#555;">Handoff summary for HR</p>
-      <p class="answer" style="font-size:0.9rem;">${data.handoff_summary.replace(/\n/g,'<br/>')}</p>` : ''}
-    `;
-  }
-
+function renderEscalation(data) {
+  const card = document.getElementById('escalation-card');
   card.innerHTML = `
-    <h2>${icon} Review Agent${roundLabel}</h2>
-    <div class="escalation-box ${boxClass}">
-      <div class="info-row">${badge}</div>
-      <p class="answer">${data.reason}</p>
-      ${extras}
+    <h2>&#128101; Forwarded to HR</h2>
+    ${intakeBadges}
+    <div class="escalation-box human">
+      <p class="answer">${data.message}</p>
     </div>
   `;
   card.style.display = 'block';
@@ -485,7 +455,8 @@ form.addEventListener('submit', async (e) => {
   document.getElementById('feedback-card').style.display = 'none';
 
   // Reset result cards
-  ['intake-card','policy-card','review-card'].forEach(id => {
+  intakeBadges = '';
+  ['intake-card','policy-card','escalation-card'].forEach(id => {
     const el = document.getElementById(id);
     el.style.display = 'none';
     el.innerHTML = '';
@@ -501,50 +472,17 @@ form.addEventListener('submit', async (e) => {
   for (const f of fileInput.files) fd.append('files', f);
 
   try {
-    const resp = await fetch('/inquiry', { method: 'POST', body: fd });
+    const chaosParam = new URLSearchParams(window.location.search).get('chaos');
+    const url = chaosParam === '1' ? '/inquiry?chaos=1' : '/inquiry';
+    const resp = await fetch(url, { method: 'POST', body: fd });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
 
-    const reader = resp.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-
-      // Parse SSE chunks
-      const chunks = buffer.split('\n\n');
-      buffer = chunks.pop(); // keep incomplete chunk
-
-      for (const chunk of chunks) {
-        const lines = chunk.trim().split('\n');
-        let event = '', data = '';
-        for (const line of lines) {
-          if (line.startsWith('event:')) event = line.slice(6).trim();
-          if (line.startsWith('data:'))  data  = line.slice(5).trim();
-        }
-        if (!event || !data) continue;
-        const payload = JSON.parse(data);
-
-        if (event === 'progress') {
-          progressMsg.textContent = payload.message;
-        } else if (event === 'intake') {
-          renderIntake(payload);
-        } else if (event === 'policy') {
-          renderPolicy(payload);
-        } else if (event === 'review') {
-          renderReview(payload);
-        } else if (event === 'error') {
-          errorBox.textContent = 'Error: ' + payload.message;
-          errorBox.style.display = 'block';
-          progressArea.style.display = 'none';
-        } else if (event === 'done') {
-          progressArea.style.display = 'none';
-          showFeedbackCard();
-        }
-      }
-    }
+    const result = await resp.json();
+    renderIntake(result.intake);
+    if (result.escalated) renderEscalation({ message: result.response });
+    else if (result.response) renderPolicy(result.response);
+    progressArea.style.display = 'none';
+    showFeedbackCard();
   } catch (err) {
     errorBox.textContent = 'Request failed: ' + err.message;
     errorBox.style.display = 'block';

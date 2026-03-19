@@ -29,3 +29,7 @@ The company conducts annual pay equity analyses. Employees who believe there is 
 ## Salary Transparency
 
 Salary bands for each role are available in the HR portal. Employees are encouraged to discuss compensation with HR if they have questions about their band placement.
+
+## Manager Access to Direct Reports' Compensation
+
+Managers have access to the current salary of all employees who report directly to them. Managers may use this information for compensation planning, performance discussions, and ensuring pay equity within their team. This information is confidential and must not be shared outside of legitimate management and HR contexts.
