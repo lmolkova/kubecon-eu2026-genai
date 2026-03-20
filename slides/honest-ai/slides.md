@@ -127,14 +127,14 @@ layout: default
 
 # How It Works
 
-<div class="flex flex-col items-center gap-4 mt-10 text-center">
+<div class="flex flex-col items-center gap-4 mt-6 text-center">
 
 <div class="flex items-center justify-center gap-6">
 
 <div class="flex flex-col items-center gap-2 w-36">
   <img src="/otel-logo.png" class="w-12 h-12" />
   <div class="font-bold">OpenTelemetry</div>
-  <div class="text-xs text-gray-500">create arbitrary spans, metrics, logs</div>
+  <div class="text-xs text-gray-500">libraries to record spans, metrics, logs</div>
 </div>
 
 <div class="text-3xl text-gray-300">+</div>
@@ -142,7 +142,7 @@ layout: default
 <div class="flex flex-col items-center gap-2 w-36">
   <div class="text-5xl">📖</div>
   <div class="font-bold">Semantic Conventions</div>
-  <div class="text-xs text-gray-500">standard names & shapes</div>
+  <div class="text-xs text-gray-500">schema - what to emit, how to name it, what's required</div>
 </div>
 
 <div class="text-3xl text-gray-300">+</div>
@@ -150,7 +150,7 @@ layout: default
 <div class="flex flex-col items-center gap-2 w-36">
   <div class="text-5xl">🧩</div>
   <div class="font-bold">Instrumentations</div>
-  <div class="text-xs text-gray-500">auto-emit, low friction</div>
+  <div class="text-xs text-gray-500">pip install → auto-emit, no code changes needed</div>
 </div>
 
 <div class="text-3xl text-gray-300">→</div>
@@ -302,7 +302,7 @@ GenAI systems are fundamentally different from regular services:
 <div class="border rounded-lg p-4">
   <div class="text-2xl mb-2">👻</div>
   <div class="font-bold mb-1">Silent drift</div>
-  <div class="text-sm text-gray-400">Model updates, prompt changes, transient failures — silently covered up by the AI</div>
+  <div class="text-sm text-gray-400">Model updates, prompt changes, transient failures - silently covered up by the AI</div>
 </div>
 </v-click>
 
@@ -648,7 +648,7 @@ layout: default
 
 # Blobs belong in object stores
 
-<div class="text-sm text-gray-500 mb-2">Trace backends index every field — great for querying, expensive for large payloads. A single LLM conversation can be 10–100 KB. Object stores just store.</div>
+<div class="text-sm text-gray-500 mb-2">Trace backends index every field - great for querying, expensive for large payloads. A single LLM conversation can be 10–100 KB. Object stores just store.</div>
 
 <div class="grid grid-cols-2 gap-2 mt-4">
 <div>
@@ -664,6 +664,10 @@ layout: default
 Span: invoke_workflow hallucHR
   gen_ai.input.messages_ref: s3://chats/{id}-inputs.json
   gen_ai.output.messages_ref: s3://chats/{id}-outputs.json
+```
+
+```bash
+aws s3 cp s3://chats/{id}-inputs.json -
 ```
 </div>
 </div>
@@ -744,10 +748,10 @@ layout: default
 
 <div class="border rounded-lg p-4">
   <div class="font-bold mb-2">🛡️ Guardrail (critical path)</div>
-  <div class="text-sm text-gray-400 mb-3">Synchronous check that <em>blocks</em> input or output — e.g. refuse if the user is asking for someone else's salary</div>
+  <div class="text-sm text-gray-400 mb-3">A safety check that <em>blocks</em> the request - e.g. refuse if the user asks for someone else's salary.</div>
   <div class="text-xs">
     ✅ Stops bad responses before they reach the user<br/>
-    ❌ Adds latency — keep checks fast and deterministic
+    ❌ Adds latency - keep checks fast and deterministic
   </div>
 </div>
 
@@ -833,7 +837,7 @@ layout: default
 <v-click>
 <div class="border rounded-lg p-4">
   <div class="font-bold mb-1">Use guardrails for hard rules</div>
-  <div class="text-sm text-gray-400">Block before the response leaves — don't rely on the LLM to police itself. Use deterministic checks where you can.</div>
+  <div class="text-sm text-gray-400">Block before the response leaves - don't rely on the LLM to police itself. Use deterministic checks where you can.</div>
 </div>
 </v-click>
 
