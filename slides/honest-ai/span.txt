@@ -1,0 +1,27 @@
+Span: invoke_agent advisor
+  gen_ai.system_instructions: "You are an HR advisor. Use tools to look up employee data and relevant policies..."
+  gen_ai.input.messages:   user: "Employee inquiry (already triaged)... I'm Alex Morgan, what's my salary..."
+  gen_ai.output.messages:  assistant: "Hello Alex, Your current salary is $212,000 USD per year..."
+
+  ├─ Span: chat <model>
+  │    gen_ai.input.messages:   system: "You are an HR advisor..."
+  │                             user:   "Employee inquiry... I'm Alex Morgan, what's my salary..."
+  │    gen_ai.output.messages:  assistant: tool_call get_employee_info_by_name(employee_name="Alex Morgan")
+  │    gen_ai.usage.input_tokens: 373
+  │    gen_ai.usage.output_tokens: 19
+  │
+  ├─ Span: execute_tool get_employee_info_by_name
+  │    gen_ai.operation.name: execute_tool
+  │    gen_ai.tool.name: get_employee_info_by_name
+  │    gen_ai.tool.call.arguments: employee_name="Alex Morgan"
+  │    gen_ai.tool.call.result:    name="Alex Morgan"  role="CEO"  salary="212000.00"  currency="USD"  ...
+  │
+  └─ Span: chat <model>
+       gen_ai.input.messages:   system:    "..."
+                                user:      "..."
+                                assistant: tool_call get_employee_info_by_name(employee_name="Alex Morgan")
+                                tool:      name="Alex Morgan"  role="CEO"  salary="212000.00"  ...
+       gen_ai.output.messages:  assistant: tool_call final_result(answer="Hello Alex, Your current salary is $212,000 USD per year..."
+                                                                   relevant_policies=["compensation_policy.md"]  needs_escalation=false)
+       gen_ai.usage.input_tokens: 988
+       gen_ai.usage.output_tokens: 133

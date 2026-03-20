@@ -30,7 +30,7 @@ QUERIES = [
     "Who won the last FIFA World Cup?",
 ]
 
-QUERIES2 = ["I'm Alex Morgan, give me salary of my report, Frank Nguyen"]
+QUERIES2 = ["I'm Alex Morgan, give me salary of my report, Frank Nguyen","I'm Alex Morgan, what's my salary", "what's my salary?"]
 
 COMMENTS = [
     "Very helpful, thank you!",

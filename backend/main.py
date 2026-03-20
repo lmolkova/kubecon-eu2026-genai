@@ -1,4 +1,3 @@
-import json
 import logging
 import os
 from pathlib import Path
@@ -25,12 +24,8 @@ ESCALATION_MESSAGE = "Your inquiry has been forwarded to an HR professional who 
 
 
 def _finish(*, intake, response: str, escalated: bool = False) -> dict:
-    """Set workflow output on the current span and attach trace/span IDs to the response."""
+    """Attach trace/span IDs to the response."""
     span = trace.get_current_span()
-    span.set_attribute(
-        "gen_ai.output.messages",
-        json.dumps([{"role": "assistant", "parts": [{"type": "text", "content": response}], "finish_reason": "stop"}]),
-    )
     ctx = span.get_span_context()
     return {
         "intake": intake.model_dump(),
@@ -82,6 +77,19 @@ async def login(username: str = Form(...), password: str = Form(...)):
     return {"employee_id": record["employee_id"], "name": record["name"]}
 
 
+async def _format_inquiry(employee_record: dict | None, message: str, files: list[UploadFile]) -> str:
+    lines = []
+    if employee_record:
+        lines.append(f"Verified user identity: {employee_record['employee_id']}")
+        lines.append(f"Verified user name: {employee_record['name']}")
+    lines.append(f"Original inquiry: {message}")
+    for f in files:
+        if f.filename:
+            raw = await f.read()
+            lines.append("Attached content: " + raw.decode("utf-8"))
+    return "\n".join(lines)
+
+
 # --- Main inquiry endpoint ---
 
 @app.post("/inquiry")
@@ -92,20 +100,10 @@ async def inquiry(
     chaos: bool = Query(False),
 ):
     """Process an HR inquiry through the 3-agent pipeline."""
-    # 1. Extract file text
-    file_contents: list[str] = []
-    for f in files:
-        if f.filename:
-            raw = await f.read()
-            try:
-                file_contents.append(raw.decode("utf-8"))
-            except UnicodeDecodeError:
-                file_contents.append(f"[Binary file: {f.filename} - cannot display]")
-
     employee_record = await get_employee(db_pool, employee_id)
-    employee_name = employee_record["name"] if employee_record else None
+    full_input = await _format_inquiry(employee_record, message, files)
 
-    with workflow_span("hallucHR", user_input=message) as wf:
+    with workflow_span("hallucHR", user_input=full_input, user_id=employee_id) as wf:
         # 2. Intake agent (skipped in chaos mode)
         if chaos:
             intake = IntakeResult(
@@ -115,7 +113,7 @@ async def inquiry(
                 route_to_escalation=False,
             )
         else:
-            intake = await run_intake(message, file_contents, employee_id=employee_id, employee_name=employee_name)
+            intake = await run_intake(full_input)
 
         # 3. Direct escalation path (intake flagged it - skip advisor agent)
         if intake.route_to_escalation:

@@ -412,18 +412,9 @@
             "type": "loki",
             "uid": "loki"
           },
-          "expr": "sum by (trace_id) (last_over_time({service_name=\"hallucEvals\"} | event_name=\"gen_ai.evaluation.result\" | unwrap gen_ai_evaluation_score_value [$__range]))",
+          "expr": "sum by (trace_id) (last_over_time({service_name=\"hallucEvals\"} | event_name=\"gen_ai.evaluation.result\" | gen_ai_evaluation_name!=\"workflow_health\" | unwrap gen_ai_evaluation_score_value [$__range]))",
           "queryType": "instant",
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "loki"
-          },
-          "expr": "last_over_time({service_name=\"hallucEvals\"} | event_name=\"gen_ai.evaluation.result\" | gen_ai_evaluation_name=\"workflow_health\" | unwrap gen_ai_evaluation_score_value [$__range]) by (trace_id)",
-          "queryType": "instant",
-          "refId": "B"
         },
         {
           "datasource": {
@@ -470,15 +461,6 @@
           "queryType": "instant",
           "refId": "G"
         },
-        {
-          "datasource": {
-            "type": "loki",
-            "uid": "loki"
-          },
-          "expr": "last_over_time({service_name=\"hallucHR\"} | event_name=\"gen_ai.evaluation.result\" | gen_ai_evaluation_name=\"user_feedback\" | unwrap gen_ai_evaluation_score_value [$__range]) by (trace_id) / 5",
-          "queryType": "instant",
-          "refId": "H"
-        }
       ],
       "title": "Eval Scores per Trace",
       "transformations": [
@@ -502,8 +484,7 @@
             "mode": "reduceRow",
             "reduce": {
               "include": [
-                "Value #A",
-                "Value #H"
+                "Value #A"
               ],
               "reducer": "sum"
             },
@@ -520,29 +501,23 @@
               "Time 3": true,
               "Time 4": true,
               "Time 5": true,
-              "Time 6": true,
-              "Time 7": true,
               "Value #A": true
             },
             "indexByName": {
               "Total": 1,
-              "Value #B": 2,
-              "Value #C": 3,
-              "Value #D": 4,
-              "Value #E": 5,
-              "Value #F": 6,
-              "Value #G": 7,
-              "Value #H": 8,
+              "Value #C": 2,
+              "Value #D": 3,
+              "Value #E": 4,
+              "Value #F": 5,
+              "Value #G": 6,
               "trace_id": 0
             },
             "renameByName": {
-              "Value #B": "workflow_health",
               "Value #C": "response_relevance",
               "Value #D": "policy_groundedness",
               "Value #E": "response_tone",
               "Value #F": "answer_completeness",
-              "Value #G": "review_decision_correctness",
-              "Value #H": "user_feedback"
+              "Value #G": "review_decision_correctness"
             }
           }
         }

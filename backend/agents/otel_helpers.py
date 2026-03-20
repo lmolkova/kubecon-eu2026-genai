@@ -169,7 +169,7 @@ async def run_agent(
                     inputs=input_messages,
                     outputs=output_messages,
                     system_instruction=sys_parts,
-                    span=span,
+                    span=None if _capture_on_span else span,
                 )
 
             _operation_duration.record(time.monotonic() - start, metric_attrs)
@@ -235,7 +235,7 @@ class WorkflowContext:
 
 
 @contextmanager
-def workflow_span(workflow_name: str, *, user_input: str):
+def workflow_span(workflow_name: str, *, user_input: str, user_id: str | None = None):
     """Context manager that wraps a multi-agent workflow in an invoke_workflow span.
 
     Args:
@@ -250,6 +250,8 @@ def workflow_span(workflow_name: str, *, user_input: str):
         "gen_ai.operation.name": "invoke_workflow",
         "gen_ai.workflow.name": workflow_name,
     }
+    if user_id:
+        span_attrs["enduser.pseudo.id"] = user_id
 
     with _tracer.start_as_current_span(
         f"invoke_workflow {workflow_name}",
@@ -282,7 +284,7 @@ def workflow_span(workflow_name: str, *, user_input: str):
                     inputs=[InputMessage(role="user", parts=[Text(user_input)])],
                     outputs=output_messages,
                     system_instruction=[],
-                    span=span,
+                    span=None if _capture_on_span else span,
                 )
 
 

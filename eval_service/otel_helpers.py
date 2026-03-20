@@ -2,6 +2,7 @@
 
 import base64
 import logging
+import sys
 
 from opentelemetry import _logs, metrics, trace
 from opentelemetry._logs import SeverityNumber, set_logger_provider
@@ -17,6 +18,24 @@ from opentelemetry.exporter.otlp.proto.grpc.metric_exporter import OTLPMetricExp
 from opentelemetry.trace import NonRecordingSpan, SpanContext, TraceFlags
 from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 from opentelemetry.instrumentation.openai_v2 import OpenAIInstrumentor
+
+_LOG_RECORD_BUILTIN_ATTRS = {
+    "args", "created", "exc_info", "exc_text", "filename", "funcName",
+    "levelname", "levelno", "lineno", "message", "module", "msecs", "msg",
+    "name", "pathname", "process", "processName", "relativeCreated",
+    "stack_info", "taskName", "thread", "threadName",
+}
+
+
+class ExtraAttrsFormatter(logging.Formatter):
+    def format(self, record):
+        msg = super().format(record)
+        extras = {k: v for k, v in record.__dict__.items() if k not in _LOG_RECORD_BUILTIN_ATTRS}
+        if extras:
+            attrs_str = " ".join(f"{k}={v!r}" for k, v in extras.items())
+            msg = f"{msg} {attrs_str}"
+        return msg
+
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +60,10 @@ def configure_otel() -> None:
     log_provider.add_log_record_processor(BatchLogRecordProcessor(OTLPLogExporter()))
     set_logger_provider(log_provider)
 
-    logging.basicConfig(level=logging.INFO)
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(ExtraAttrsFormatter())
+    logging.getLogger().addHandler(handler)
+    logging.getLogger().setLevel(logging.INFO)
 
     _otel_logger = _logs.get_logger("evals", "0.1.0")
 

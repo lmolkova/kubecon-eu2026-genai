@@ -1,6 +1,7 @@
 """OpenTelemetry setup - traces, metrics, and logs with OTLP gRPC export."""
 
 import logging
+import sys
 
 from opentelemetry import metrics, trace
 from opentelemetry._logs import set_logger_provider
@@ -18,6 +19,24 @@ from opentelemetry.sdk.trace.export import BatchSpanProcessor, SpanExporter, Spa
 from opentelemetry.instrumentation.asyncpg import AsyncPGInstrumentor
 from opentelemetry.instrumentation.httpx import HTTPXClientInstrumentor
 from opentelemetry.instrumentation.openai_v2 import OpenAIInstrumentor
+
+
+_LOG_RECORD_BUILTIN_ATTRS = {
+    "args", "created", "exc_info", "exc_text", "filename", "funcName",
+    "levelname", "levelno", "lineno", "message", "module", "msecs", "msg",
+    "name", "pathname", "process", "processName", "relativeCreated",
+    "stack_info", "taskName", "thread", "threadName",
+}
+
+
+class ExtraAttrsFormatter(logging.Formatter):
+    def format(self, record):
+        msg = super().format(record)
+        extras = {k: v for k, v in record.__dict__.items() if k not in _LOG_RECORD_BUILTIN_ATTRS}
+        if extras:
+            attrs_str = " ".join(f"{k}={v!r}" for k, v in extras.items())
+            msg = f"{msg} {attrs_str}"
+        return msg
 
 
 class FilteringSpanExporter(SpanExporter):
@@ -99,3 +118,7 @@ def _configure_logs() -> None:
     handler = LoggingHandler(level=logging.INFO, logger_provider=provider)
     logging.getLogger().addHandler(handler)
     logging.getLogger().setLevel(logging.INFO)
+
+    stream_handler = logging.StreamHandler(sys.stdout)
+    stream_handler.setFormatter(ExtraAttrsFormatter())
+    logging.getLogger().addHandler(stream_handler)
