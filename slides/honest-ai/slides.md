@@ -7,8 +7,8 @@ info: |
 colorSchema: light
 transition: slide-left
 duration: 25min
-defaults:
-  background: /slide.png
+#defaults:
+#  background: /slide.png
 layout: intro-image
 image: /title.png
 ---
@@ -45,6 +45,7 @@ layout: default
   <div class="text-sm text-gray-800">
     Member of the <strong>OpenTelemetry Technical Committee</strong><br/>
     Semantic Conventions maintainer
+    GenAI SemConv and Instrumentation SIG lead
   </div>
 
   <div class="flex flex-col gap-2 text-sm mt-2">
@@ -178,7 +179,7 @@ layout: default
 layout: default
 ---
 
-# Semantic Conventions: the formal schema
+# GenAI Semantic Conventions
 
 <a href="https://opentelemetry.io/docs/specs/semconv/gen-ai/" class="flex items-center gap-1 text-sm text-gray-400 no-underline hover:text-gray-600 mb-2">🔭 opentelemetry.io/docs/specs/semconv/gen-ai</a>
 
@@ -252,26 +253,6 @@ class: text-center
 layout: default
 ---
 
-# It Looks Fine...
-
-```
-GET /inquiry HTTP/1.1
-200 OK
-latency: 1.2s
-tokens: 847
-
-{
-  "answer": "Your PTO balance is 12 days",
-  "policies_cited": ["vacation_policy"]
-}
-```
-
-*Is this right? We have no idea.*
-
----
-layout: default
----
-
 # The Non-Determinism Problem
 
 <div class="mt-4">
@@ -282,38 +263,30 @@ GenAI systems are fundamentally different from regular services:
 
 <div class="grid grid-cols-3 gap-4 mt-6">
 
-<v-click>
 <div class="border rounded-lg p-4">
   <div class="text-2xl mb-2">🎲</div>
   <div class="font-bold mb-1">Unpredictable inputs</div>
   <div class="text-sm text-gray-400">Users ask anything - and will actively try to trick the AI</div>
 </div>
-</v-click>
 
-<v-click>
 <div class="border rounded-lg p-4">
   <div class="text-2xl mb-2">🌀</div>
   <div class="font-bold mb-1">Unpredictable outputs</div>
   <div class="text-sm text-gray-400">Same prompt → different answer every run</div>
 </div>
-</v-click>
 
-<v-click>
 <div class="border rounded-lg p-4">
   <div class="text-2xl mb-2">👻</div>
   <div class="font-bold mb-1">Silent drift</div>
   <div class="text-sm text-gray-400">Model updates, prompt changes, transient failures - silently covered up by the AI</div>
 </div>
-</v-click>
 
 </div>
 
-<v-click>
 <div class="mt-8 text-center text-xl">
   Performance signals are necessary - but not sufficient.
   <br/>We need <strong>quality signals</strong>.
 </div>
-</v-click>
 
 ---
 layout: section
@@ -355,20 +328,11 @@ layout: default
   <div class="text-sm text-gray-400 mb-3">Automated model scores outputs</div>
   <div class="text-xs">
     ✅ Scalable, continuous<br/>
-    ❌ Biased, inconsistent - and gameable*
+    ❌ Biased, inconsistent
   </div>
 </div>
 
 </div>
-
-<div v-click class="mt-6 text-sm text-gray-400 text-center">
-  * Prompt injection is real. An adversarial user can craft inputs that manipulate the judge.
-  <br/>Combine approaches for coverage.
-</div>
-
-<!--
-The "judge may be bribed" line usually gets a laugh. Explain: prompt injection can trick an LLM judge into scoring bad responses highly.
--->
 
 ---
 layout: image
@@ -428,10 +392,6 @@ async def run_advisor(inputs):
 </div>
 </div>
 
-<!--
-Key point: offline evals are like unit tests for AI. Necessary but not sufficient.
--->
-
 ---
 layout: default
 ---
@@ -445,37 +405,6 @@ You've run your tests and offline evals ✅
 **Now it's time for real users to talk to your agent**
 
 </div>
-
-<div class="grid grid-cols-2 gap-6 mt-8">
-
-<v-click>
-<div class="border rounded-lg p-4 border-orange-400">
-  <div class="font-bold mb-2">⭐ User ratings</div>
-  <div class="text-sm">Sparse. Biased toward extreme experiences.
-  Delayed. No context for why.</div>
-</div>
-</v-click>
-
-<v-click>
-<div class="border rounded-lg p-4 border-orange-400">
-  <div class="font-bold mb-2">👩‍💼 Human review</div>
-  <div class="text-sm">Doesn't scale. Still no visibility into the black box.
-  You see the output, not the reasoning.</div>
-</div>
-</v-click>
-
-</div>
-
-<v-click>
-<div class="mt-8 text-center text-xl">
-  Neither tells you <em>why</em> the agent did what it did.
-</div>
-</v-click>
-
-<!--
-Bridge to the next section: to understand WHY, you need to see what's happening inside.
--->
-
 ---
 layout: section
 ---
@@ -514,29 +443,23 @@ layout: default
 
 <div class="grid grid-cols-3 gap-4 mt-6">
 
-<v-click>
 <div class="border rounded-lg p-4">
   <div class="text-2xl mb-2">💬</div>
   <div class="font-bold mb-1">Full conversations</div>
   <div class="text-sm text-gray-400">Every LLM and agent span carries prompts and completions - the full message history</div>
 </div>
-</v-click>
 
-<v-click>
 <div class="border rounded-lg p-4">
   <div class="text-2xl mb-2">🔧</div>
   <div class="font-bold mb-1">Tool calls</div>
   <div class="text-sm text-gray-400">Arguments and results on every tool/function call span</div>
 </div>
-</v-click>
 
-<v-click>
 <div class="border rounded-lg p-4">
   <div class="text-2xl mb-2">🔗</div>
   <div class="font-bold mb-1">Correlated</div>
   <div class="text-sm text-gray-400">All linked together - with latency, errors, and token counts</div>
 </div>
-</v-click>
 
 </div>
 
@@ -546,59 +469,11 @@ layout: default
     <div>📦 <strong>Telemetry volume</strong> - conversations add up fast</div>
     <div>🔒 <strong>Sensitive data</strong> - PII, secrets, and confidential content flow through</div>
 </div>
-</v-click>
-
----
-layout: default
----
-
-# Content Capture Has a Price
-
-<div class="grid grid-cols-2 gap-8 mt-6">
-
-<div>
-
-<v-click>
-
-**Storage volume**
-
-LLM inputs/outputs are large - 10x–100x the size of a normal span.
-
-Trace backends are optimized for structured metadata, not blobs.
-
-Costs scale fast.
-
-</v-click>
-
-</div>
-
-<div>
-
-<v-click>
-
-**Privacy**
-
-Conversation content may include:
-- Personally identifiable information
-- Health details
-- Legal concerns
-- ...embarrassing moments
-
-</v-click>
-
-</div>
-
-</div>
-
-<v-click>
 <div class="mt-8 text-center text-xl border rounded-lg p-4">
   "Do you want every on-call engineer to have access to your users' HR conversations?"
 </div>
-</v-click>
 
-<div v-click class="mt-4 text-sm text-gray-400 text-center">
-  Note: some backends offer fine-grained access control.
-</div>
+</v-click>
 
 ---
 layout: default
@@ -705,38 +580,22 @@ We can now debug one trace. But what about **thousands of conversations per day*
 
 <div class="grid grid-cols-3 gap-4 mt-8">
 
-<v-click>
 <div class="border rounded-lg p-4 opacity-50">
   <div class="font-bold mb-2">Manual review</div>
   <div class="text-sm text-gray-400">You already ruled this out</div>
 </div>
-</v-click>
 
-<v-click>
 <div class="border rounded-lg p-4 opacity-50">
   <div class="font-bold mb-2">User ratings</div>
   <div class="text-sm text-gray-400">Still sparse and biased</div>
 </div>
-</v-click>
 
-<v-click>
 <div class="border rounded-lg p-4 border-green-400">
   <div class="font-bold mb-2">🤖 Online evals</div>
   <div class="text-sm text-gray-400">LLM-as-judge running continuously and asynchronously in production</div>
 </div>
-</v-click>
 
 </div>
-
-<v-click>
-<div class="mt-8 text-center">
-  Automated, continuous, correlated with the rest of your telemetry.
-</div>
-</v-click>
-
-<!--
-The key word is "continuously" - not a batch job you run once a week, but a signal running alongside your app.
--->
 
 ---
 layout: default
